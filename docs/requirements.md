@@ -4,7 +4,7 @@
 
 | Layer       | Technology                              |
 |-------------|-----------------------------------------|
-| Backend     | ASP.NET Core 8 Web API + MediatR + EF Core |
+| Backend     | ASP.NET Core 10 Web API + MediatR + EF Core |
 | Frontend    | React + TypeScript + Recharts           |
 | Database    | PostgreSQL                              |
 | Scheduler   | Hangfire                                |
