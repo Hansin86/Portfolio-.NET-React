@@ -10,6 +10,7 @@ reports portfolio value, cost basis, and P&L converted to a chosen base currency
 See `docs/requirements.md` for the full functional/non-functional spec (FR-01..FR-21,
 NFR-01..NFR-07) — it is the source of truth for intended behavior, including the
 isolated, auto-expiring **demo account** mechanism.
+See `docs/database-schema.md` for full database schema and relationships.
 
 Current state: backend solution scaffolded from templates (the only non-trivial code is
 the default `WeatherForecast` sample, which should be removed as real features land).
