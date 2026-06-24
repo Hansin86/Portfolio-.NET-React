@@ -6,13 +6,13 @@ the *how / in what order*. Update it as slices land.
 
 ---
 
-## Current state (2026-06-23)
+## Current state (2026-06-24)
 
 | Layer | State |
 |-------|-------|
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums |
 | **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration. Initial migration `InitialCreate` generated and applied to local Postgres |
-| **Application** | ⚠️ Empty — no MediatR, no features, no validators/mappings |
+| **Application** | ⚠️ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). No features/validators/mappings yet |
 | **API** | ⚠️ Only the `WeatherForecast` sample — no auth, no MediatR wiring, no exception middleware |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
@@ -29,8 +29,11 @@ Auth is the hard dependency for everything else: FR-03 (users see only their own
 and NFR-04 (all endpoints JWT-protected) gate every other feature. This slice also wires
 the entire pipeline once, so later features just repeat the pattern.
 
-1. **Application wiring** — add MediatR + FluentValidation + AutoMapper packages and a
-   `DependencyInjection.AddApplication()`; add a FluentValidation pipeline behavior.
+1. ✅ **Application wiring** — `DependencyInjection.AddApplication()` registers MediatR,
+   AutoMapper, and FluentValidation validators from the Application assembly, plus the
+   `ValidationBehaviour<,>` MediatR pipeline behavior (registered as an open behavior).
+   Packages were already referenced; project builds clean. Still to wire into the API
+   composition root (step 4).
 2. **Ports** — `IPasswordHasher` + `IJwtTokenGenerator` interfaces in Application;
    **bcrypt** + JWT implementations in Infrastructure (NFR-03). Add a user repository
    interface + EF implementation.
