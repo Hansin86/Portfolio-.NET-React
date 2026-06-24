@@ -11,8 +11,8 @@ the *how / in what order*. Update it as slices land.
 | Layer | State |
 |-------|-------|
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums |
-| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration. Initial migration `InitialCreate` generated and applied to local Postgres |
-| **Application** | ⚠️ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). No features/validators/mappings yet |
+| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, all wired in `AddInfrastructure()` |
+| **Application** | ⚠️ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined (`IPasswordHasher`, `IJwtTokenGenerator`, `IUserRepository`). No features/validators/mappings yet |
 | **API** | ⚠️ Only the `WeatherForecast` sample — no auth, no MediatR wiring, no exception middleware |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
@@ -34,9 +34,13 @@ the entire pipeline once, so later features just repeat the pattern.
    `ValidationBehaviour<,>` MediatR pipeline behavior (registered as an open behavior).
    Packages were already referenced; project builds clean. Still to wire into the API
    composition root (step 4).
-2. **Ports** — `IPasswordHasher` + `IJwtTokenGenerator` interfaces in Application;
-   **bcrypt** + JWT implementations in Infrastructure (NFR-03). Add a user repository
-   interface + EF implementation.
+2. ✅ **Ports** — `IPasswordHasher`, `IJwtTokenGenerator`, and `IUserRepository`
+   interfaces in Application; Infrastructure implementations: bcrypt `PasswordHasher`
+   (`BCrypt.Net-Next`), `JwtTokenGenerator` using `JsonWebTokenHandler`/HMAC-SHA256 with
+   `JwtSettings` options, and EF Core `UserRepository`. Registered in `AddInfrastructure()`
+   (hasher + token generator as singletons, repository scoped). Builds clean.
+   **Remaining:** populate the `Jwt` config section (key/issuer/audience) via user-secrets
+   in step 4.
 3. **Use cases** — `RegisterCommand` + handler + validator; `LoginCommand`/`Query` +
    handler returning a JWT.
 4. **API** — thin `AuthController` (`register` / `login`); add JWT bearer auth +
