@@ -48,7 +48,7 @@ flowchart LR
 
 - **Role:** primary datastore for all domain data (users, portfolios, assets,
   transactions, price snapshots, FX rates, demo sessions).
-- **Access:** EF Core 9 via the **Npgsql** provider. `PortfolioDbContext` and its EF
+- **Access:** EF Core 10 via the **Npgsql** provider. `PortfolioDbContext` and its EF
   configurations live in Infrastructure; schema changes ship as EF migrations.
 - **Local dev:** runs in Docker (`docker-compose.yml` → `portfolio-db`, port 5432) with
   pgAdmin alongside. The connection string is read from user-secrets

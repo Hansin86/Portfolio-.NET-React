@@ -11,6 +11,9 @@ See `docs/requirements.md` for the full functional/non-functional spec (FR-01..F
 NFR-01..NFR-07) — it is the source of truth for intended behavior, including the
 isolated, auto-expiring **demo account** mechanism.
 See `docs/database-schema.md` for full database schema and relationships.
+See `docs/architecture/architecture-cross-cutting.md`, `docs/architecture/architecture-external-integrations.md`, 
+`docs/architecture/architecture-layers.md`, `docs/architecture/architecture-request-lifecycle.md`, 
+`docs/architecture/architecture-tech-stack.md` for full architecture description in project.
 
 Current state: backend solution scaffolded from templates (the only non-trivial code is
 the default `WeatherForecast` sample, which should be removed as real features land).
@@ -76,7 +79,7 @@ Infrastructure implementation → API controller endpoint.
 
 ## Tech Stack
  
-- **Backend:** ASP.NET Core 10 Web API, MediatR (CQRS), EF Core 9, PostgreSQL, Hangfire
+- **Backend:** ASP.NET Core 10 Web API, MediatR (CQRS), EF Core 10, PostgreSQL, Hangfire
 - **Frontend:** React + TypeScript, Recharts
 - **Auth:** JWT Bearer tokens
 - **Market data:** Alpha Vantage API (prices + FX rates)

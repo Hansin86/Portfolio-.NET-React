@@ -66,7 +66,7 @@ ones through interfaces.
 
 - **Responsibility:** concrete implementations of Application ports. Everything that talks
   to the outside world: persistence, background jobs, outbound HTTP.
-- **Contents:** `PortfolioDbContext` + EF configurations + migrations (EF Core 9 /
+- **Contents:** `PortfolioDbContext` + EF configurations + migrations (EF Core 10 /
   **Npgsql**), Hangfire (PostgreSQL storage) for scheduled jobs, and the Alpha Vantage
   market-data/FX client **(planned)**.
 - **Dependencies:** Application and Domain.
