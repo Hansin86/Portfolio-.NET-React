@@ -1,0 +1,51 @@
+name: CI
+
+# Build + test gate (NFR-07). Runs on every push and on PRs targeting main.
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+# Cancel superseded runs for the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore PortfolioApp.slnx
+
+      - name: Build
+        run: dotnet build PortfolioApp.slnx --configuration Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tests/PortfolioApp.UnitTests --configuration Release --no-build --verbosity normal
+
+      # ubuntu-latest ships with a running Docker daemon, so Testcontainers can spin up
+      # the disposable PostgreSQL instance these tests require.
+      - name: Integration tests
+        run: dotnet test tests/PortfolioApp.IntegrationTests --configuration Release --no-build --verbosity normal
