@@ -23,13 +23,27 @@ tool (`dotnet-tools.json` manifest) — restore with `dotnet tool restore`.
 
 ---
 
-## ✅ Done: Authentication vertical slice (FR-01, FR-02, FR-03, NFR-03, NFR-04)
+## ✅ Done: Authentication vertical slice (FR-01, NFR-03; foundation for FR-03, FR-02, NFR-04)
 
 Auth is the hard dependency for everything else: FR-03 (users see only their own data)
 and NFR-04 (all endpoints JWT-protected) gate every other feature. This slice also wires
 the entire pipeline once, so later features just repeat the pattern. **All five steps below
-are complete; full test suite (24 unit + 5 integration) is green.** Next up is the CI
-pipeline (recommended) then Transactions CRUD — see "Feature sequence after auth" below.
+are complete; full test suite (24 unit + 5 integration) is green.**
+
+Requirement status — what this slice actually delivered:
+- **FR-01** (register) ✅ and **NFR-03** (bcrypt-hashed passwords) ✅ — fully satisfied.
+- **FR-02** (log in / log out) — login ✅; logout not handled (stateless JWT, no
+  revocation yet).
+- **FR-03** (per-user data isolation) — **foundation only.** JWT carries the user id
+  (`sub`), but no data endpoints / `[Authorize]` / per-user scoping exist yet; realized
+  when Transactions CRUD lands.
+- **NFR-04** (all endpoints JWT-protected) — **foundation only.** Authentication +
+  `UseAuthorization()` are wired, but no endpoint carries `[Authorize]` (the only
+  endpoints, `register`/`login`, are intentionally anonymous). Enforcement arrives with
+  the first protected feature.
+
+Next up is the CI pipeline (recommended) then Transactions CRUD — see "Feature sequence
+after auth" below.
 
 1. ✅ **Application wiring** — `DependencyInjection.AddApplication()` registers MediatR,
    AutoMapper, and FluentValidation validators from the Application assembly, plus the
