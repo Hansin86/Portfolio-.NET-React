@@ -61,3 +61,9 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>
+/// Exposed as a public partial class so the integration test project can reference it as
+/// the entry point for <c>WebApplicationFactory&lt;Program&gt;</c>.
+/// </summary>
+public partial class Program;

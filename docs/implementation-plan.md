@@ -12,8 +12,8 @@ the *how / in what order*. Update it as slices land.
 |-------|-------|
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums |
 | **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, all wired in `AddInfrastructure()` |
-| **Application** | ⚠️ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined (`IPasswordHasher`, `IJwtTokenGenerator`, `IUserRepository`). No features/validators/mappings yet |
-| **API** | ⚠️ Only the `WeatherForecast` sample — no auth, no MediatR wiring, no exception middleware |
+| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto` |
+| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware`. WeatherForecast sample removed |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
 pgAdmin (`portfolio-pgadmin`, http://localhost:5050). Credentials come from a gitignored
@@ -23,11 +23,13 @@ tool (`dotnet-tools.json` manifest) — restore with `dotnet tool restore`.
 
 ---
 
-## Next step: Authentication vertical slice (FR-01, FR-02, FR-03, NFR-03, NFR-04)
+## ✅ Done: Authentication vertical slice (FR-01, FR-02, FR-03, NFR-03, NFR-04)
 
 Auth is the hard dependency for everything else: FR-03 (users see only their own data)
 and NFR-04 (all endpoints JWT-protected) gate every other feature. This slice also wires
-the entire pipeline once, so later features just repeat the pattern.
+the entire pipeline once, so later features just repeat the pattern. **All five steps below
+are complete; full test suite (24 unit + 5 integration) is green.** Next up is the CI
+pipeline (recommended) then Transactions CRUD — see "Feature sequence after auth" below.
 
 1. ✅ **Application wiring** — `DependencyInjection.AddApplication()` registers MediatR,
    AutoMapper, and FluentValidation validators from the Application assembly, plus the
@@ -41,13 +43,23 @@ the entire pipeline once, so later features just repeat the pattern.
    (hasher + token generator as singletons, repository scoped). Builds clean.
    **Remaining:** populate the `Jwt` config section (key/issuer/audience) via user-secrets
    in step 4.
-3. **Use cases** — `RegisterCommand` + handler + validator; `LoginCommand`/`Query` +
-   handler returning a JWT.
-4. **API** — thin `AuthController` (`register` / `login`); add JWT bearer auth +
-   `app.UseAuthentication()`; global exception-handling middleware; register Application
-   and new Infrastructure services; **delete the WeatherForecast sample**.
-5. **Tests** — unit test for the register handler; integration test hitting
-   `/auth/register` then `/auth/login` (Testcontainers — Docker must be running).
+3. ✅ **Use cases** — `Features/Auth/Register/` and `Features/Auth/Login/`:
+   `RegisterCommand`/`LoginCommand` (records) + handler + validator each, returning a
+   shared `AuthResponseDto` (`UserId`, `Email`, JWT). Handlers normalize email
+   (trim + lowercase), hash/verify via `IPasswordHasher`, and issue a token via
+   `IJwtTokenGenerator`. New `Domain/Exceptions`: `EmailAlreadyInUseException`,
+   `InvalidCredentialsException`. Register password policy: 12–128 chars, upper/lower/digit,
+   no whitespace.
+4. ✅ **API** — thin `AuthController` (`POST /auth/register`, `POST /auth/login`) over
+   MediatR `ISender`; JWT bearer auth wired in `Program.cs` (`TokenValidationParameters`
+   from `JwtSettings`) + `app.UseAuthentication()`; global `ExceptionHandlingMiddleware`
+   maps `ValidationException`→400, `EmailAlreadyInUseException`→409,
+   `InvalidCredentialsException`→401, else 500 (RFC 7807). `Jwt` issuer/audience in
+   `appsettings.json`, secret `Jwt:Key` in user-secrets. **WeatherForecast sample deleted.**
+5. ✅ **Tests** — 24 unit tests (register/login handlers + both validators); 5 integration
+   tests via `WebApplicationFactory<Program>` + Testcontainers Postgres hitting
+   `/auth/register` → `/auth/login` (plus duplicate-email 409, weak-password 400,
+   bad-credential 401). Full suite green.
 
 ---
 
