@@ -13,13 +13,21 @@
 
 ---
 
+## Implementation Status
+
+Legend: **✅ implemented** · **🟡 partially implemented** · _unmarked = not yet started_.
+Status as of 2026-06-25 (after the authentication slice + CI pipeline). This reflects what
+is actually built and tested, not what is merely scaffolded.
+
+---
+
 ## Functional Requirements
 
 ### Authentication & Users
 
-- **FR-01:** Users can register with email and password
-- **FR-02:** Users can log in and log out
-- **FR-03:** Each user sees only their own portfolio data
+- **FR-01:** ✅ Users can register with email and password
+- **FR-02:** 🟡 Users can log in and log out — _login implemented; logout not (stateless JWT, no revocation/endpoint yet)_
+- **FR-03:** Each user sees only their own portfolio data — _not started: no portfolio data endpoints or per-user scoping exist yet (the JWT carries the user id as groundwork)_
 - **FR-04:** Demo account
   - A built-in demo account is available without registration
   - The demo portfolio is pre-populated with a predefined set of transactions and assets
@@ -64,13 +72,13 @@
 
 ## Non-Functional Requirements
 
-- **NFR-01:** REST API documented with Swagger / OpenAPI
-- **NFR-02:** Backend response time under 500ms for all non-external-API endpoints
-- **NFR-03:** Passwords stored as hashed values (e.g. bcrypt)
-- **NFR-04:** All API endpoints protected with JWT authentication
-- **NFR-05:** Application deployable via Docker Compose (backend + frontend + database)
-- **NFR-06:** Backend and frontend code hosted in a public GitHub repository
-- **NFR-07:** CI pipeline (GitHub Actions) runs build and unit tests on every push
+- **NFR-01:** 🟡 REST API documented with Swagger / OpenAPI — _OpenAPI + Scalar wired; auth endpoints documented (XML + ProducesResponseType); coverage grows as endpoints land_
+- **NFR-02:** Backend response time under 500ms for all non-external-API endpoints — _not measured/verified_
+- **NFR-03:** ✅ Passwords stored as hashed values (e.g. bcrypt)
+- **NFR-04:** 🟡 All API endpoints protected with JWT authentication — _JWT auth fully wired (token validation + `UseAuthentication`), but no endpoint carries `[Authorize]` yet; the only endpoints (register/login) are intentionally anonymous_
+- **NFR-05:** 🟡 Application deployable via Docker Compose (backend + frontend + database) — _compose covers Postgres (+ pgAdmin) for local dev; backend and frontend services not yet included_
+- **NFR-06:** 🟡 Backend and frontend code hosted in a public GitHub repository — _backend on GitHub (`Hansin86/Portfolio-.NET-React`); frontend not yet in the repo_
+- **NFR-07:** ✅ CI pipeline (GitHub Actions) runs build and unit tests on every push — _workflow built and verified locally (build + unit + integration); on branch `ci/github-actions-pipeline`, active once merged to main_
 
 ---
 

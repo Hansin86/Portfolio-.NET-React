@@ -77,10 +77,95 @@ after auth" below.
 
 ---
 
+## Next slice: Transactions CRUD (FR-05, FR-06, FR-07)
+
+First per-user feature. It establishes the ownership/scoping pattern (**FR-03**) and the
+first `[Authorize]`-protected endpoints (**NFR-04** enforcement), so later features just
+repeat it. The `Transactions`, `Assets`, and `Portfolios` tables already exist from the
+`InitialCreate` migration — **no schema migration is needed**; this slice is Application +
+API + repository code, plus two small prerequisites.
+
+### Prerequisites (cross-cutting — do these first)
+
+- **P1 — Current-user accessor.** Add an `ICurrentUserService` port in Application exposing
+  `UserId` (Guid) and, for later, `IsDemo` / `DemoSessionId`. Implement over
+  `IHttpContextAccessor` (read the `sub` claim); register `AddHttpContextAccessor()` + the
+  service in the composition root. This is the read-side of FR-03 and the basis for the
+  first enforced endpoints.
+- **P2 — Portfolio bootstrap.** Registration currently creates only a `User`, so the
+  one-portfolio-per-user invariant isn't established yet. Extend `RegisterCommandHandler`
+  to also create the user's `Portfolio` (default `BaseCurrency`, e.g. `"USD"` — settable
+  later via FR-11) in the same unit of work. Add `IPortfolioRepository`
+  (`GetByUserIdAsync`). _(Alternative: lazily ensure-portfolio inside the add-transaction
+  handler; creating it at registration is cleaner and keeps the invariant explicit —
+  recommended.)_
+- **P3 — `NotFoundException`** in `Domain/Exceptions`, mapped to **404** in
+  `ExceptionHandlingMiddleware`. Used when a transaction is missing _or not owned_ by the
+  caller — return 404 (not 403) so existence isn't leaked.
+
+### Steps
+
+1. **Domain.** No entity changes expected — `Transaction`, `Asset`, `Portfolio` and their
+   EF configs already exist. Optional: a small domain helper to compute current held
+   quantity / weighted-average cost if you want the over-sell guard in step 3. No migration.
+2. **Ports (Application interfaces).**
+   - `ITransactionRepository` — `AddAsync`, `GetByIdAsync`, `Update`, `Remove`, and a
+     portfolio-scoped list method taking filter/sort parameters.
+   - `IAssetRepository` — `GetByTickerAsync`, `AddAsync` (for get-or-create).
+   - `IPortfolioRepository` (from P2).
+   - All registered scoped in `AddInfrastructure()`.
+3. **Use cases — `Application/Features/Transactions/`** (one folder per operation, CQRS):
+   - **`AddTransaction/`** — `AddTransactionCommand(Ticker, Type, Quantity, PricePerUnit,
+     Currency, TransactionDate, AssetType?)` → `TransactionDto`. Handler: resolve the
+     caller's portfolio (`ICurrentUserService` + `IPortfolioRepository`); **get-or-create**
+     the `Asset` by ticker (interim: `Name = Ticker`, `AssetType` from request or default
+     `Stock`, `QuoteCurrency = Currency` — real metadata arrives with FR-08); create +
+     persist the `Transaction`. Optional rule: reject a `Sell` exceeding current holdings →
+     `DomainException` (422/400).
+   - **`EditTransaction/`** — `EditTransactionCommand(Id, …editable fields)`. Load by id,
+     verify it belongs to the caller's portfolio (else `NotFoundException`), apply, persist.
+   - **`DeleteTransaction/`** — `DeleteTransactionCommand(Id)`. Load + ownership check, remove.
+   - **`GetTransactions/`** — `GetTransactionsQuery(AssetTicker?, Type?, FromDate?, ToDate?,
+     SortBy?, Descending?, Page?, PageSize?)` → list of `TransactionDto` (FR-07 sort/filter),
+     scoped to the caller's portfolio.
+   - **(optional) `GetTransactionById/`** to back a `GET /{id}` endpoint.
+   - **Validators** next to each command: `Quantity > 0`; `PricePerUnit > 0`; `Currency`
+     ISO-4217 (3 uppercase letters); `Ticker` non-empty, max length 20; `TransactionDate`
+     not in the future; `Type` defined.
+   - **`TransactionDto`** (`Id`, `Ticker`, `AssetName`, `Type`, `Quantity`, `PricePerUnit`,
+     `Currency`, `TransactionDate`) + an **AutoMapper profile** in `Common/Mappings/`.
+4. **Infrastructure.** Implement the three repositories over `PortfolioDbContext`; implement
+   `ICurrentUserService` (here or in API). Lean on the existing
+   `IX_Transactions_PortfolioId_AssetId` and `IX_Transactions_TransactionDate` indexes for
+   the filtered/sorted list query. Register everything in `AddInfrastructure()`.
+5. **API — `TransactionsController`** (`[Authorize]`, `[Route("transactions")]`, thin over
+   `ISender`):
+   - `POST /transactions` → **201 Created** (`AddTransactionCommand`)
+   - `GET /transactions` → **200** (query params → `GetTransactionsQuery`)
+   - `GET /transactions/{id}` → **200 / 404** (optional)
+   - `PUT /transactions/{id}` → **200/204** (`EditTransactionCommand`, id from route)
+   - `DELETE /transactions/{id}` → **204 / 404**
+
+   XML summaries + `ProducesResponseType` on every action. Wire `AddHttpContextAccessor()`
+   and the current-user service in the composition root.
+6. **Tests.**
+   - **Unit** (`tests/.../Features/Transactions/`): add-handler (get-or-create asset,
+     portfolio resolution, optional over-sell guard), edit/delete ownership checks
+     (`NotFoundException` for another user's id), list filtering/sorting, and all validators.
+   - **Integration:** extend the harness with an authenticated-client helper (register →
+     login → attach bearer token); exercise the full CRUD lifecycle; assert **FR-03**
+     isolation (user A cannot read/edit/delete user B's transaction → 404) and that
+     `[Authorize]` returns **401** without a token (**NFR-04**).
+
+**Requirements this slice moves:** FR-05/06/07 → implemented; FR-03 → first real
+enforcement (per-portfolio scoping + ownership); NFR-04 → first `[Authorize]` endpoints.
+
+---
+
 ## Feature sequence after auth
 
-1. **Transactions CRUD** (FR-05, FR-06, FR-07) — buy/sell, edit/delete, history with
-   sort/filter. First real per-user feature; exercises the auth/ownership pattern.
+1. **Transactions CRUD** (FR-05, FR-06, FR-07) — _detailed steps above._ First real
+   per-user feature; exercises the auth/ownership pattern.
 2. **Market data + FX** (FR-08–FR-12) — Alpha Vantage client behind an Application
    interface, Infrastructure implementation; Hangfire job for scheduled price refresh;
    multi-currency asset support; FX rate fetching.
@@ -97,8 +182,9 @@ after auth" below.
 
 ## Cross-cutting (slot in early)
 
-- **CI pipeline (NFR-07)** — GitHub Actions: build + unit tests on every push. Cheap to
-  add now and protects every later slice. Recommend doing this right after the auth slice.
+- ✅ **CI pipeline (NFR-07)** — GitHub Actions workflow added (`.github/workflows/ci.yml`):
+  build + unit + integration tests on push / PRs to main. On branch
+  `ci/github-actions-pipeline`, active once merged.
 - **OpenAPI/Scalar (NFR-01)** — already scaffolded; keep endpoints documented as they land.
 
 ---
