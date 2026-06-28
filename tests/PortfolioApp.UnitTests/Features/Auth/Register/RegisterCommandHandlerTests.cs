@@ -41,6 +41,25 @@ public class RegisterCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenEmailIsAvailable_CreatesPortfolioWithDefaultBaseCurrency()
+    {
+        _users.EmailExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
+
+        var command = new RegisterCommand("user@example.com", "Sup3rSecretPass");
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        // The portfolio rides on the user aggregate so both persist in one unit of work.
+        await _users.Received(1).AddAsync(
+            Arg.Is<User>(user =>
+                user.Portfolios.Count == 1 &&
+                user.Portfolios.Single().BaseCurrency == "USD" &&
+                user.Portfolios.Single().Id != Guid.Empty),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_WhenEmailIsAvailable_ReturnsTokenAndUserIdentity()
     {
         _users.EmailExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);

@@ -8,10 +8,15 @@ namespace PortfolioApp.Application.Features.Auth.Register;
 
 /// <summary>
 /// Handles <see cref="RegisterCommand"/>: enforces email uniqueness, hashes the password
-/// (NFR-03), persists the new user, and issues a JWT.
+/// (NFR-03), persists the new user together with their portfolio, and issues a JWT.
 /// </summary>
 public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthResponseDto>
 {
+    /// <summary>
+    /// Default base display currency for a new portfolio. Users can change it later (FR-11).
+    /// </summary>
+    private const string DefaultBaseCurrency = "USD";
+
     private readonly IUserRepository _users;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _tokenGenerator;
@@ -35,14 +40,25 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthRespo
             throw new EmailAlreadyInUseException(email);
         }
 
+        DateTime now = DateTime.UtcNow;
+
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = _passwordHasher.Hash(request.Password),
             IsDemoTemplate = false,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = now,
         };
+
+        // Establish the one-portfolio-per-user invariant up front. Attaching it to the user
+        // graph lets it persist in the same unit of work (single SaveChanges) as the user.
+        user.Portfolios.Add(new Portfolio
+        {
+            Id = Guid.NewGuid(),
+            BaseCurrency = DefaultBaseCurrency,
+            CreatedAt = now,
+        });
 
         await _users.AddAsync(user, cancellationToken);
 
