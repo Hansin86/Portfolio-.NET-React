@@ -11,9 +11,9 @@ the *how / in what order*. Update it as slices land.
 | Layer | State |
 |-------|-------|
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
-| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**, all wired in `AddInfrastructure()` |
-| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto`; registration now **bootstraps the user's `Portfolio`** (default base currency `USD`) in the same unit of work |
-| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (now maps `NotFoundException`→404, `DomainException`→422). **`CurrentUserService`** (over `IHttpContextAccessor`) + `AddHttpContextAccessor()` wired. WeatherForecast sample removed |
+| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**. **`TransactionRepository`** (filter/sort/page list + `GetHeldQuantityAsync`) + **`AssetRepository`** (get-or-create by ticker). All wired in `AddInfrastructure()` |
+| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**, **`ITransactionRepository`**, **`IAssetRepository`**. Auth features landed (`Register`/`Login`); registration **bootstraps the user's `Portfolio`** (default base currency `USD`). **Transactions CRUD** landed: `AddTransaction`/`EditTransaction`/`DeleteTransaction` commands + `GetTransactions`/`GetTransactionById` queries (+ validators), `TransactionDto`, `PagedResult<T>`, first AutoMapper profile (`Common/Mappings/TransactionProfile`) |
+| **API** | ✅ `AuthController` (`register`/`login`) + **`TransactionsController`** (`[Authorize]` CRUD — first JWT-protected endpoints, NFR-04). JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (maps `NotFoundException`→404, `DomainException`→422, `ValidationException`→400). **`CurrentUserService`** (over `IHttpContextAccessor`) wired. **`JsonStringEnumConverter`** registered so enums serialize as names. WeatherForecast sample removed |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
 pgAdmin (`portfolio-pgadmin`, http://localhost:5050). Credentials come from a gitignored
@@ -77,11 +77,48 @@ after auth" below.
 
 ---
 
-## Next slice: Transactions CRUD (FR-05, FR-06, FR-07)
+## ✅ Done: Transactions CRUD (FR-05, FR-06, FR-07)
 
 First per-user feature. It establishes the ownership/scoping pattern (**FR-03**) and the
 first `[Authorize]`-protected endpoints (**NFR-04** enforcement), so later features just
-repeat it. The `Transactions`, `Assets`, and `Portfolios` tables already exist from the
+repeat it. No schema migration was needed (`Transactions`/`Assets`/`Portfolios` already
+existed from `InitialCreate`). **Landed in 8 small commits; full suite green: 98 unit + 9
+integration tests.**
+
+Requirement status — what this slice delivered:
+- **FR-05** (add transaction) ✅, **FR-06** (edit/delete) ✅, **FR-07** (filter/sort/page
+  list) ✅.
+- **FR-03** (per-user isolation) ✅ — first real enforcement: every command/query resolves
+  the caller's portfolio via `ICurrentUserService` + `IPortfolioRepository` and scopes to
+  it; another user's transaction returns **404** (existence not leaked). Integration-tested.
+- **NFR-04** (JWT-protected endpoints) ✅ — `TransactionsController` is the first
+  `[Authorize]` controller; unauthenticated requests return **401**. Integration-tested.
+
+Key decisions made while building (deviations from the original plan below):
+- **Over-sell guard on Add + Edit + Delete.** Net held quantity per asset (Σ buys − Σ sells)
+  must never go negative. Implemented as `ITransactionRepository.GetHeldQuantityAsync`
+  (DB-side sum, with an optional `excludeTransactionId` for re-validating edits/deletes)
+  rather than a separate domain calculator — simpler to unit-test via the mocked port.
+  Violations throw `DomainException` → **422**. (Delete was added to the guard after the
+  initial Add+Edit scope, to keep the invariant consistent.)
+- **Paged list with total count.** `GetTransactions` returns `PagedResult<TransactionDto>`
+  (`Items`, `TotalCount`, `Page`, `PageSize`); default page size 20, **capped at 100**
+  (`GetTransactionsQueryValidator.MaxPageSize`). Default sort is `TransactionDate`
+  descending. Every sort carries a `.ThenBy(Id)` tie-breaker for deterministic paging.
+- **Ticker/asset is not editable.** `EditTransaction` changes trade details only
+  (Type/Quantity/PricePerUnit/Currency/Date); correcting a wrong ticker means delete +
+  re-add. Keeps the over-sell guard single-asset.
+- **`JsonStringEnumConverter` registered globally** so the JSON contract uses enum names
+  (`"Buy"`/`"Sell"`, `"Stock"`/`"Etf"`) instead of integers.
+- **PUT returns 200** with the updated `TransactionDto`; **POST returns 201** + `Location`
+  (`CreatedAtAction` → `GET /{id}`); **DELETE returns 204**.
+- **Asset get-or-create** seeds interim metadata (`Name = Ticker`, `QuoteCurrency =`
+  transaction currency, `AssetType` from request or `Stock`) — real metadata arrives with
+  FR-08.
+
+### Original plan (for reference)
+
+The `Transactions`, `Assets`, and `Portfolios` tables already exist from the
 `InitialCreate` migration — **no schema migration is needed**; this slice is Application +
 API + repository code, plus two small prerequisites.
 
@@ -223,8 +260,8 @@ FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers
 
 ## Feature sequence after auth
 
-1. **Transactions CRUD** (FR-05, FR-06, FR-07) — _detailed steps above._ First real
-   per-user feature; exercises the auth/ownership pattern.
+1. ✅ **Transactions CRUD** (FR-05, FR-06, FR-07) — _done; see the slice section above._
+   First real per-user feature; established the auth/ownership pattern.
 2. **Frontend foundation + auth & transactions UI** (FR-01, FR-02, FR-05–FR-07; NFR-06) —
    _detailed steps above._ React/TS app, API client + auth, and the transactions UI —
    first working end-to-end slice. Later UI screens (dashboard, charts) layer on as their
@@ -249,6 +286,10 @@ FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers
   build + unit + integration tests on push / PRs to main. On branch
   `ci/github-actions-pipeline`, active once merged.
 - **OpenAPI/Scalar (NFR-01)** — already scaffolded; keep endpoints documented as they land.
+- **Align EF Core package versions (cleanup)** — the unit-test project surfaces an
+  `MSB3277` conflict between `Microsoft.EntityFrameworkCore.Relational` 10.0.4 and 10.0.9
+  (pulled in transitively via the API/Infrastructure references). Harmless today; pin a
+  single version across projects to clear the warning.
 
 ---
 
