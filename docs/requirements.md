@@ -27,7 +27,7 @@ is actually built and tested, not what is merely scaffolded.
 
 - **FR-01:** ✅ Users can register with email and password
 - **FR-02:** 🟡 Users can log in and log out — _login implemented; logout not (stateless JWT, no revocation/endpoint yet)_
-- **FR-03:** Each user sees only their own portfolio data — _not started: no portfolio data endpoints or per-user scoping exist yet (the JWT carries the user id as groundwork)_
+- **FR-03:** ✅ Each user sees only their own portfolio data — _enforced by the Transactions slice: every command/query resolves the caller's portfolio (`ICurrentUserService` + `IPortfolioRepository`) and scopes to it; another user's transaction returns 404 (existence not leaked). Integration-tested. Re-applied as each new per-user feature lands._
 - **FR-04:** Demo account
   - A built-in demo account is available without registration
   - The demo portfolio is pre-populated with a predefined set of transactions and assets
@@ -38,9 +38,9 @@ is actually built and tested, not what is merely scaffolded.
 
 ### Portfolio & Transactions
 
-- **FR-05:** User can add a transaction (buy or sell) for a stock or ETF, specifying ticker, quantity, price per share, currency, and date
-- **FR-06:** User can edit or delete an existing transaction
-- **FR-07:** User can view the full transaction history, sorted and filtered by asset or date
+- **FR-05:** ✅ User can add a transaction (buy or sell) for a stock or ETF, specifying ticker, quantity, price per share, currency, and date — _`POST /transactions`; get-or-create asset by ticker; over-sell guard (422)_
+- **FR-06:** ✅ User can edit or delete an existing transaction — _`PUT`/`DELETE /transactions/{id}`; ownership-checked (404 for others); the over-sell/negative-holding guard re-runs on edit and delete_
+- **FR-07:** ✅ User can view the full transaction history, sorted and filtered by asset or date — _`GET /transactions`; filter by ticker/type/date range, sortable, paged (`PagedResult` with total count, page size capped at 100)_
 
 ### Market Data
 
@@ -72,13 +72,13 @@ is actually built and tested, not what is merely scaffolded.
 
 ## Non-Functional Requirements
 
-- **NFR-01:** 🟡 REST API documented with Swagger / OpenAPI — _OpenAPI + Scalar wired; auth endpoints documented (XML + ProducesResponseType); coverage grows as endpoints land_
+- **NFR-01:** 🟡 REST API documented with Swagger / OpenAPI — _OpenAPI + Scalar wired; auth and transactions endpoints documented (XML + ProducesResponseType, string enums via `JsonStringEnumConverter`); coverage grows as endpoints land_
 - **NFR-02:** Backend response time under 500ms for all non-external-API endpoints — _not measured/verified_
 - **NFR-03:** ✅ Passwords stored as hashed values (e.g. bcrypt)
-- **NFR-04:** 🟡 All API endpoints protected with JWT authentication — _JWT auth fully wired (token validation + `UseAuthentication`), but no endpoint carries `[Authorize]` yet; the only endpoints (register/login) are intentionally anonymous_
+- **NFR-04:** 🟡 All API endpoints protected with JWT authentication — _JWT auth fully wired; `TransactionsController` is the first `[Authorize]` controller (unauthenticated → 401, integration-tested). `register`/`login` are intentionally anonymous. Every new data endpoint carries `[Authorize]` as it lands._
 - **NFR-05:** 🟡 Application deployable via Docker Compose (backend + frontend + database) — _compose covers Postgres (+ pgAdmin) for local dev; backend and frontend services not yet included_
 - **NFR-06:** 🟡 Backend and frontend code hosted in a public GitHub repository — _backend on GitHub (`Hansin86/Portfolio-.NET-React`); frontend not yet in the repo_
-- **NFR-07:** ✅ CI pipeline (GitHub Actions) runs build and unit tests on every push — _workflow built and verified locally (build + unit + integration); on branch `ci/github-actions-pipeline`, active once merged to main_
+- **NFR-07:** ✅ CI pipeline (GitHub Actions) runs build and unit tests on every push — _`.github/workflows/ci.yml` merged to `main` and active: build + unit + integration tests on push / PRs to main_
 
 ---
 

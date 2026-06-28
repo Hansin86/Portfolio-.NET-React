@@ -12,11 +12,11 @@ into a handler, out to Infrastructure, and back as a response.
 ```mermaid
 sequenceDiagram
     actor Client
-    participant MW as Exception middleware (planned)
-    participant Auth as JWT auth/authorization (planned)
+    participant MW as Exception middleware (wired)
+    participant Auth as JWT auth/authorization (wired)
     participant Ctrl as Controller (thin)
     participant Med as MediatR
-    participant Val as Validation behavior (planned)
+    participant Val as Validation behavior (wired)
     participant H as Handler
     participant Repo as Repository / port
     participant DB as PostgreSQL
@@ -45,20 +45,22 @@ sequenceDiagram
 
 ## Stage by stage
 
-### 1. Exception-handling middleware *(planned)*
-The outermost stage. Wraps the whole pipeline so any domain or validation exception is
-translated into a consistent HTTP response (problem-details JSON) instead of leaking a
-stack trace. Maps custom `Domain/Exceptions` types to status codes (e.g. not-found → 404,
-validation → 400, unauthorized → 401). Keeps error handling out of controllers and
-handlers.
+### 1. Exception-handling middleware *(wired)*
+The outermost stage. `ExceptionHandlingMiddleware` wraps the whole pipeline so any domain
+or validation exception is translated into a consistent RFC 7807 `problem+json` response
+instead of leaking a stack trace. Maps custom `Domain/Exceptions` types to status codes:
+`ValidationException`→400, `EmailAlreadyInUseException`→409, `InvalidCredentialsException`→401,
+`NotFoundException`→404, `DomainException`→422, else 500. Keeps error handling out of
+controllers and handlers.
 
-### 2. Authentication & authorization *(planned)*
+### 2. Authentication & authorization *(wired)*
 JWT bearer authentication validates the `Authorization: Bearer <token>` header and
-attaches the user identity (claims) to `HttpContext`. NFR-04 requires **all** endpoints
-JWT-protected (except `register`/`login`/`demo`). Demo requests carry `is_demo` and
-`demo_session_id` claims, which downstream handlers use to scope data to the demo
-portfolio. `Program.cs` currently calls `UseAuthorization()` but no authentication scheme
-is registered yet.
+attaches the user identity (claims) to `HttpContext`; handlers read it via
+`ICurrentUserService` to scope data per user (FR-03). NFR-04 requires **all** endpoints
+JWT-protected (except `register`/`login`/`demo`) — `TransactionsController` is the first
+`[Authorize]` controller. Demo claims (`is_demo`, `demo_session_id`) are defined in the
+design but not issued yet (FR-04). `Program.cs` registers the JWT bearer scheme and calls
+`UseAuthentication()` then `UseAuthorization()`.
 
 ### 3. Controller (thin)
 The action does almost nothing: bind the request, build a MediatR `Command`/`Query`, call
@@ -71,7 +73,7 @@ controller actions carry XML summary comments (feeds OpenAPI/Scalar).
 command/query → one handler). Requests live in
 `Application/Features/<Feature>/`, one class per command or query.
 
-### 5. Validation behavior *(planned)*
+### 5. Validation behavior *(wired)*
 A MediatR **pipeline behavior** runs registered FluentValidation validators for the
 request before it reaches the handler. On failure it throws a `ValidationException`
 (caught by the middleware in stage 1 → 400). Validators live next to their command. This
@@ -106,5 +108,5 @@ serializes it to JSON. Entities never cross the API boundary directly.
 - **DTOs at the edge** prevent leaking the domain model (and EF navigation graphs) to
   clients.
 
-See `architecture-cross-cutting.md` *(planned)* for auth, logging (Serilog), exception
+See `architecture-cross-cutting.md` for auth, logging (Serilog, still planned), exception
 middleware, and OpenAPI/Scalar in more depth.
