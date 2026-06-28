@@ -20,6 +20,7 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
+        .WithCleanUp(true)
         .Build();
 
     public async Task InitializeAsync()
