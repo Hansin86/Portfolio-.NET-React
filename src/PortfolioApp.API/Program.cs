@@ -2,7 +2,9 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using PortfolioApp.API.Middleware;
+using PortfolioApp.API.Services;
 using PortfolioApp.Application;
+using PortfolioApp.Application.Interfaces;
 using PortfolioApp.Infrastructure;
 using PortfolioApp.Infrastructure.Identity;
 using Scalar.AspNetCore;
@@ -20,6 +22,11 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
+
+// Exposes the authenticated caller (JWT claims) to Application handlers — the read-side
+// of per-user data scoping (FR-03).
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 JwtSettings jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
     ?? throw new InvalidOperationException(
