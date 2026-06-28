@@ -1,3 +1,5 @@
+using PortfolioApp.Domain.ValueObjects;
+
 namespace PortfolioApp.Domain.Entities;
 
 /// <summary>
@@ -9,10 +11,10 @@ public class FxRate
     public Guid Id { get; set; }
 
     /// <summary>ISO 4217 source currency, e.g. USD.</summary>
-    public string FromCurrency { get; set; } = string.Empty;
+    public Currency FromCurrency { get; set; } = null!;
 
     /// <summary>ISO 4217 target currency, e.g. PLN.</summary>
-    public string ToCurrency { get; set; } = string.Empty;
+    public Currency ToCurrency { get; set; } = null!;
 
     /// <summary>Units of <see cref="ToCurrency"/> per one unit of <see cref="FromCurrency"/>.</summary>
     public decimal Rate { get; set; }

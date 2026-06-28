@@ -5,6 +5,7 @@ using PortfolioApp.Application.Features.Auth.Register;
 using PortfolioApp.Application.Interfaces;
 using PortfolioApp.Domain.Entities;
 using PortfolioApp.Domain.Exceptions;
+using PortfolioApp.Domain.ValueObjects;
 
 namespace PortfolioApp.UnitTests.Features.Auth.Register;
 
@@ -54,7 +55,7 @@ public class RegisterCommandHandlerTests
         await _users.Received(1).AddAsync(
             Arg.Is<User>(user =>
                 user.Portfolios.Count == 1 &&
-                user.Portfolios.Single().BaseCurrency == "USD" &&
+                user.Portfolios.Single().BaseCurrency == Currency.Usd &&
                 user.Portfolios.Single().Id != Guid.Empty),
             Arg.Any<CancellationToken>());
     }

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PortfolioApp.Domain.Entities;
+using PortfolioApp.Domain.ValueObjects;
+using PortfolioApp.Infrastructure.Persistence.Converters;
 
 namespace PortfolioApp.Infrastructure.Persistence;
 
@@ -27,5 +29,16 @@ public class PortfolioDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PortfolioDbContext).Assembly);
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+
+        // Map every Currency value object to its 3-char code column. Keeps the existing
+        // varchar(3) store type, so no schema migration is required.
+        configurationBuilder.Properties<Currency>()
+            .HaveConversion<CurrencyConverter>()
+            .HaveMaxLength(3);
     }
 }

@@ -3,6 +3,7 @@ using PortfolioApp.Application.Features.Auth.Common;
 using PortfolioApp.Application.Interfaces;
 using PortfolioApp.Domain.Entities;
 using PortfolioApp.Domain.Exceptions;
+using PortfolioApp.Domain.ValueObjects;
 
 namespace PortfolioApp.Application.Features.Auth.Register;
 
@@ -15,7 +16,7 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthRespo
     /// <summary>
     /// Default base display currency for a new portfolio. Users can change it later (FR-11).
     /// </summary>
-    private const string DefaultBaseCurrency = "USD";
+    private static readonly Currency DefaultBaseCurrency = Currency.Usd;
 
     private readonly IUserRepository _users;
     private readonly IPasswordHasher _passwordHasher;

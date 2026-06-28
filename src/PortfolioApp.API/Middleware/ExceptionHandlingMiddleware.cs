@@ -41,6 +41,7 @@ public class ExceptionHandlingMiddleware
             EmailAlreadyInUseException => CreateProblem(StatusCodes.Status409Conflict, "Conflict", exception.Message),
             InvalidCredentialsException => CreateProblem(StatusCodes.Status401Unauthorized, "Unauthorized", exception.Message),
             NotFoundException => CreateProblem(StatusCodes.Status404NotFound, "Not Found", exception.Message),
+            DomainException => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable Entity", exception.Message),
             _ => CreateUnhandledProblem(exception),
         };
 

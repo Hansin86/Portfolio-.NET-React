@@ -1,3 +1,5 @@
+using PortfolioApp.Domain.ValueObjects;
+
 namespace PortfolioApp.Domain.Entities;
 
 /// <summary>
@@ -14,7 +16,7 @@ public class PriceSnapshot
     public decimal Price { get; set; }
 
     /// <summary>ISO 4217 currency, matching the asset's quote currency.</summary>
-    public string Currency { get; set; } = string.Empty;
+    public Currency Currency { get; set; } = null!;
 
     /// <summary>Timestamp of the fetched price.</summary>
     public DateTime RecordedAt { get; set; }

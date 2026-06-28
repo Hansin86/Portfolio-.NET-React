@@ -1,4 +1,5 @@
 using PortfolioApp.Domain.Enums;
+using PortfolioApp.Domain.ValueObjects;
 
 namespace PortfolioApp.Domain.Entities;
 
@@ -18,7 +19,7 @@ public class Asset
     public AssetType AssetType { get; set; }
 
     /// <summary>ISO 4217 currency the asset is quoted in.</summary>
-    public string QuoteCurrency { get; set; } = string.Empty;
+    public Currency QuoteCurrency { get; set; } = null!;
 
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 
