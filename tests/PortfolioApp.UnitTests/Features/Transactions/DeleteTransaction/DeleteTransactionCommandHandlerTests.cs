@@ -76,4 +76,34 @@ public class DeleteTransactionCommandHandlerTests
         await act.Should().ThrowAsync<NotFoundException>();
         await _transactions.DidNotReceive().RemoveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task Handle_WhenRemovalWouldDriveHoldingNegative_ThrowsDomainException()
+    {
+        Transaction transaction = TransactionIn(_portfolio.Id);
+        _transactions.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+        // Net of every other row for the asset is already negative without this (a buy).
+        _transactions.GetHeldQuantityAsync(
+                _portfolio.Id, transaction.AssetId, transaction.Id, Arg.Any<CancellationToken>())
+            .Returns(-2m);
+
+        Func<Task> act = () => _handler.Handle(new DeleteTransactionCommand(transaction.Id), CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainException>();
+        await _transactions.DidNotReceive().RemoveAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenRemovalLeavesNonNegativeHolding_Removes()
+    {
+        Transaction transaction = TransactionIn(_portfolio.Id);
+        _transactions.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+        _transactions.GetHeldQuantityAsync(
+                _portfolio.Id, transaction.AssetId, transaction.Id, Arg.Any<CancellationToken>())
+            .Returns(5m);
+
+        await _handler.Handle(new DeleteTransactionCommand(transaction.Id), CancellationToken.None);
+
+        await _transactions.Received(1).RemoveAsync(transaction, Arg.Any<CancellationToken>());
+    }
 }

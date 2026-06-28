@@ -37,6 +37,18 @@ public class DeleteTransactionCommandHandler : IRequestHandler<DeleteTransaction
             throw new NotFoundException(nameof(Transaction), request.Id);
         }
 
+        // Removing this transaction must not leave the asset's net holding negative — e.g.
+        // deleting a buy that later sells depend on. The net of every other row for the
+        // asset (this one excluded) is exactly what remains after deletion.
+        decimal heldAfterRemoval = await _transactions.GetHeldQuantityAsync(
+            portfolio.Id, transaction.AssetId, transaction.Id, cancellationToken);
+
+        if (heldAfterRemoval < 0)
+        {
+            throw new DomainException(
+                $"Cannot delete this transaction; it would leave a negative holding of {transaction.Asset.Ticker}.");
+        }
+
         await _transactions.RemoveAsync(transaction, cancellationToken);
     }
 }
