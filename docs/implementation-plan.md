@@ -162,21 +162,67 @@ enforcement (per-portfolio scoping + ownership); NFR-04 → first `[Authorize]` 
 
 ---
 
+## Next slice (frontend): Frontend foundation + auth & transactions UI
+
+Stand up the React/TypeScript app once the auth and Transactions CRUD endpoints exist, so
+there's a working **end-to-end vertical slice** (register/login → manage transactions)
+before more backend features land. This also gets the frontend into the repo (**NFR-06**)
+and establishes the patterns (API client, auth/token handling, routing, forms) that every
+later UI screen reuses. The dashboard and chart screens stay deferred until their backends
+(FR-13–FR-21) exist — see the revised sequence below.
+
+### Prerequisites (cross-cutting — do these first)
+
+- **F1 — CORS.** Add an ASP.NET Core CORS policy allowing the frontend dev origin
+  (Vite default `http://localhost:5173`); read allowed origins from config so prod can
+  differ.
+- **F2 — Auth contract check.** Confirm `AuthResponseDto` (JWT + `UserId`/`Email`) is what
+  the client needs to bootstrap a session; no token-refresh endpoint exists (stateless
+  JWT), so the client treats expiry as "log in again."
+
+### Steps
+
+1. **Scaffold.** Vite + React + TypeScript app under `frontend/` (or `src/web/`). Add
+   ESLint/Prettier, an `.env` for the API base URL, and an npm scripts baseline
+   (`dev`/`build`/`lint`/`test`). Commit a README note on running it alongside the API.
+2. **API client + auth.** Typed `fetch`/axios client with a base URL and a request
+   interceptor that attaches the `Authorization: Bearer <jwt>` header. Auth context/store
+   holding the token + user; persist to `localStorage`; redirect to login on `401`.
+3. **Routing + layout.** React Router with public routes (`/login`, `/register`) and a
+   protected-route wrapper guarding the app shell. Minimal layout (nav + sign-out).
+4. **Auth screens (FR-01, FR-02).** Register and login forms with client-side validation
+   mirroring the backend password policy; surface API errors (409 duplicate email, 401 bad
+   credentials, 400 validation). Sign-out clears the stored token.
+5. **Transactions UI (FR-05, FR-06, FR-07).** Transactions list with sort + filter
+   (by asset/date) backed by `GET /transactions`; add/edit transaction form
+   (`POST`/`PUT`); delete with confirm. Loading/empty/error states.
+6. **Tests + CI.** Component/integration tests (Vitest + React Testing Library); extend the
+   GitHub Actions workflow (NFR-07) with a frontend job (install → lint → build → test).
+
+**Requirements this slice moves:** FR-01/FR-02 → usable UI (incl. logout in the client);
+FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers the frontend.
+
+---
+
 ## Feature sequence after auth
 
 1. **Transactions CRUD** (FR-05, FR-06, FR-07) — _detailed steps above._ First real
    per-user feature; exercises the auth/ownership pattern.
-2. **Market data + FX** (FR-08–FR-12) — Alpha Vantage client behind an Application
+2. **Frontend foundation + auth & transactions UI** (FR-01, FR-02, FR-05–FR-07; NFR-06) —
+   _detailed steps above._ React/TS app, API client + auth, and the transactions UI —
+   first working end-to-end slice. Later UI screens (dashboard, charts) layer on as their
+   backends land.
+3. **Market data + FX** (FR-08–FR-12) — Alpha Vantage client behind an Application
    interface, Infrastructure implementation; Hangfire job for scheduled price refresh;
    multi-currency asset support; FX rate fetching.
-3. **Portfolio summary** (FR-13–FR-17) — weighted-average cost basis, current value,
+4. **Portfolio summary** (FR-13–FR-17) — weighted-average cost basis, current value,
    P&L (absolute + %), per-asset rows, all converted to base currency at display time.
-4. **Demo session** (FR-04) — seed read-only `demo_portfolio_template` at startup; copy
+   _(+ dashboard UI on the frontend foundation.)_
+5. **Demo session** (FR-04) — seed read-only `demo_portfolio_template` at startup; copy
    per login with `demo_session_id`; demo JWT claims `is_demo` + `demo_session_id`;
-   Hangfire cleanup job for sessions older than 60 min.
-5. **Charts endpoints** (FR-18–FR-21) — value-over-time, allocation, per-asset price
-   history, P&L history.
-6. **React + TypeScript frontend** — dashboard, transaction management, Recharts visuals.
+   Hangfire cleanup job for sessions older than 60 min. _(+ "Try the demo" entry on the UI.)_
+6. **Charts endpoints + UI** (FR-18–FR-21) — value-over-time, allocation, per-asset price
+   history, P&L history; Recharts visuals on the frontend.
 7. **Deployment** — Docker Compose for full stack (NFR-05); Railway (backend+DB) +
    Vercel (frontend).
 
