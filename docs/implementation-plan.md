@@ -6,14 +6,14 @@ the *how / in what order*. Update it as slices land.
 
 ---
 
-## Current state (2026-06-24)
+## Current state (2026-06-28)
 
 | Layer | State |
 |-------|-------|
-| **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums |
-| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, all wired in `AddInfrastructure()` |
-| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto` |
-| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware`. WeatherForecast sample removed |
+| **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
+| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**, all wired in `AddInfrastructure()` |
+| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto`; registration now **bootstraps the user's `Portfolio`** (default base currency `USD`) in the same unit of work |
+| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (now maps `NotFoundException`→404, `DomainException`→422). **`CurrentUserService`** (over `IHttpContextAccessor`) + `AddHttpContextAccessor()` wired. WeatherForecast sample removed |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
 pgAdmin (`portfolio-pgadmin`, http://localhost:5050). Credentials come from a gitignored
@@ -85,23 +85,40 @@ repeat it. The `Transactions`, `Assets`, and `Portfolios` tables already exist f
 `InitialCreate` migration — **no schema migration is needed**; this slice is Application +
 API + repository code, plus two small prerequisites.
 
-### Prerequisites (cross-cutting — do these first)
+### Prerequisites (cross-cutting) — ✅ done
 
-- **P1 — Current-user accessor.** Add an `ICurrentUserService` port in Application exposing
-  `UserId` (Guid) and, for later, `IsDemo` / `DemoSessionId`. Implement over
-  `IHttpContextAccessor` (read the `sub` claim); register `AddHttpContextAccessor()` + the
-  service in the composition root. This is the read-side of FR-03 and the basis for the
-  first enforced endpoints.
-- **P2 — Portfolio bootstrap.** Registration currently creates only a `User`, so the
-  one-portfolio-per-user invariant isn't established yet. Extend `RegisterCommandHandler`
-  to also create the user's `Portfolio` (default `BaseCurrency`, e.g. `"USD"` — settable
-  later via FR-11) in the same unit of work. Add `IPortfolioRepository`
-  (`GetByUserIdAsync`). _(Alternative: lazily ensure-portfolio inside the add-transaction
-  handler; creating it at registration is cleaner and keeps the invariant explicit —
-  recommended.)_
-- **P3 — `NotFoundException`** in `Domain/Exceptions`, mapped to **404** in
+All three landed on `feature/Transactions-CRUD-prerequisites` (build clean; 45 unit tests
+green; `dotnet ef migrations has-pending-model-changes` reports none).
+
+- ✅ **P1 — Current-user accessor.** `ICurrentUserService` port (Application) exposing
+  `UserId` (Guid), `IsDemo`, `DemoSessionId`. `CurrentUserService` impl (API) over
+  `IHttpContextAccessor`, reading the `sub` claim (with `ClaimTypes.NameIdentifier`
+  fallback, since the bearer handler maps `sub` by default); throws
+  `UnauthorizedAccessException` when absent/malformed. `AddHttpContextAccessor()` + the
+  service registered in the composition root. Unit-tested (9 tests; unit-test project now
+  references the API project). _Read-side of FR-03._
+- ✅ **P2 — Portfolio bootstrap.** `RegisterCommandHandler` now creates the user's
+  `Portfolio` (default base currency `Currency.Usd`) attached to the user aggregate, so it
+  persists in the **same unit of work** (single `SaveChanges`). `IPortfolioRepository`
+  (`GetByUserIdAsync`) + EF `PortfolioRepository` added. Unit-tested.
+- ✅ **P3 — `NotFoundException`** in `Domain/Exceptions`, mapped to **404** in
   `ExceptionHandlingMiddleware`. Used when a transaction is missing _or not owned_ by the
-  caller — return 404 (not 403) so existence isn't leaked.
+  caller — 404 (not 403) so existence isn't leaked. (Integration coverage arrives with the
+  CRUD slice, per the project's exception-mapping test convention.)
+
+### Bonus: `Currency` value object (cross-cutting cleanup done alongside the prerequisites)
+
+While bootstrapping the portfolio it was clear the raw `string` currency fields wanted a
+single typed source of truth. Added a `Currency` value object (Domain `ValueObjects/`):
+sealed record, created only via `Currency.From(code)` which validates against `Iso4217`
+codes and throws `DomainException` (→ **422**). All 7 currency properties across the
+entities now use `Currency`; persisted as the 3-char code via `CurrencyConverter`, wired
+once in `PortfolioDbContext.ConfigureConventions` — **store type unchanged (`varchar(3)`),
+so no migration**. Implications for the CRUD slice below:
+- The transaction `Currency` validator can use `Iso4217.Codes` / `Currency.From` instead of
+  a regex — one source of truth.
+- `TransactionDto` should expose currency as the `Code` **string**; the AutoMapper profile
+  maps `Currency` → `string` (and back via `Currency.From` where needed).
 
 ### Steps
 
@@ -162,21 +179,67 @@ enforcement (per-portfolio scoping + ownership); NFR-04 → first `[Authorize]` 
 
 ---
 
+## Next slice (frontend): Frontend foundation + auth & transactions UI
+
+Stand up the React/TypeScript app once the auth and Transactions CRUD endpoints exist, so
+there's a working **end-to-end vertical slice** (register/login → manage transactions)
+before more backend features land. This also gets the frontend into the repo (**NFR-06**)
+and establishes the patterns (API client, auth/token handling, routing, forms) that every
+later UI screen reuses. The dashboard and chart screens stay deferred until their backends
+(FR-13–FR-21) exist — see the revised sequence below.
+
+### Prerequisites (cross-cutting — do these first)
+
+- **F1 — CORS.** Add an ASP.NET Core CORS policy allowing the frontend dev origin
+  (Vite default `http://localhost:5173`); read allowed origins from config so prod can
+  differ.
+- **F2 — Auth contract check.** Confirm `AuthResponseDto` (JWT + `UserId`/`Email`) is what
+  the client needs to bootstrap a session; no token-refresh endpoint exists (stateless
+  JWT), so the client treats expiry as "log in again."
+
+### Steps
+
+1. **Scaffold.** Vite + React + TypeScript app under `frontend/` (or `src/web/`). Add
+   ESLint/Prettier, an `.env` for the API base URL, and an npm scripts baseline
+   (`dev`/`build`/`lint`/`test`). Commit a README note on running it alongside the API.
+2. **API client + auth.** Typed `fetch`/axios client with a base URL and a request
+   interceptor that attaches the `Authorization: Bearer <jwt>` header. Auth context/store
+   holding the token + user; persist to `localStorage`; redirect to login on `401`.
+3. **Routing + layout.** React Router with public routes (`/login`, `/register`) and a
+   protected-route wrapper guarding the app shell. Minimal layout (nav + sign-out).
+4. **Auth screens (FR-01, FR-02).** Register and login forms with client-side validation
+   mirroring the backend password policy; surface API errors (409 duplicate email, 401 bad
+   credentials, 400 validation). Sign-out clears the stored token.
+5. **Transactions UI (FR-05, FR-06, FR-07).** Transactions list with sort + filter
+   (by asset/date) backed by `GET /transactions`; add/edit transaction form
+   (`POST`/`PUT`); delete with confirm. Loading/empty/error states.
+6. **Tests + CI.** Component/integration tests (Vitest + React Testing Library); extend the
+   GitHub Actions workflow (NFR-07) with a frontend job (install → lint → build → test).
+
+**Requirements this slice moves:** FR-01/FR-02 → usable UI (incl. logout in the client);
+FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers the frontend.
+
+---
+
 ## Feature sequence after auth
 
 1. **Transactions CRUD** (FR-05, FR-06, FR-07) — _detailed steps above._ First real
    per-user feature; exercises the auth/ownership pattern.
-2. **Market data + FX** (FR-08–FR-12) — Alpha Vantage client behind an Application
+2. **Frontend foundation + auth & transactions UI** (FR-01, FR-02, FR-05–FR-07; NFR-06) —
+   _detailed steps above._ React/TS app, API client + auth, and the transactions UI —
+   first working end-to-end slice. Later UI screens (dashboard, charts) layer on as their
+   backends land.
+3. **Market data + FX** (FR-08–FR-12) — Alpha Vantage client behind an Application
    interface, Infrastructure implementation; Hangfire job for scheduled price refresh;
    multi-currency asset support; FX rate fetching.
-3. **Portfolio summary** (FR-13–FR-17) — weighted-average cost basis, current value,
+4. **Portfolio summary** (FR-13–FR-17) — weighted-average cost basis, current value,
    P&L (absolute + %), per-asset rows, all converted to base currency at display time.
-4. **Demo session** (FR-04) — seed read-only `demo_portfolio_template` at startup; copy
+   _(+ dashboard UI on the frontend foundation.)_
+5. **Demo session** (FR-04) — seed read-only `demo_portfolio_template` at startup; copy
    per login with `demo_session_id`; demo JWT claims `is_demo` + `demo_session_id`;
-   Hangfire cleanup job for sessions older than 60 min.
-5. **Charts endpoints** (FR-18–FR-21) — value-over-time, allocation, per-asset price
-   history, P&L history.
-6. **React + TypeScript frontend** — dashboard, transaction management, Recharts visuals.
+   Hangfire cleanup job for sessions older than 60 min. _(+ "Try the demo" entry on the UI.)_
+6. **Charts endpoints + UI** (FR-18–FR-21) — value-over-time, allocation, per-asset price
+   history, P&L history; Recharts visuals on the frontend.
 7. **Deployment** — Docker Compose for full stack (NFR-05); Railway (backend+DB) +
    Vercel (frontend).
 

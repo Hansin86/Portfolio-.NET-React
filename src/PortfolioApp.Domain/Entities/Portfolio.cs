@@ -1,3 +1,5 @@
+using PortfolioApp.Domain.ValueObjects;
+
 namespace PortfolioApp.Domain.Entities;
 
 /// <summary>
@@ -13,7 +15,7 @@ public class Portfolio
     public User? User { get; set; }
 
     /// <summary>ISO 4217 base display currency, e.g. PLN, USD, EUR.</summary>
-    public string BaseCurrency { get; set; } = string.Empty;
+    public Currency BaseCurrency { get; set; } = null!;
 
     public DateTime CreatedAt { get; set; }
 

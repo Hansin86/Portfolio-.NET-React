@@ -1,4 +1,5 @@
 using PortfolioApp.Domain.Enums;
+using PortfolioApp.Domain.ValueObjects;
 
 namespace PortfolioApp.Domain.Entities;
 
@@ -25,7 +26,7 @@ public class Transaction
     public decimal PricePerUnit { get; set; }
 
     /// <summary>ISO 4217 currency of <see cref="PricePerUnit"/>.</summary>
-    public string Currency { get; set; } = string.Empty;
+    public Currency Currency { get; set; } = null!;
 
     /// <summary>Date the trade took place (distinct from <see cref="CreatedAt"/>).</summary>
     public DateOnly TransactionDate { get; set; }
