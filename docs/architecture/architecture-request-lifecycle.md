@@ -1,7 +1,7 @@
 # Architecture — Request Lifecycle
 
 Part of the architecture reference (see `architecture-layers.md` for the layering and
-`architecture-domain-model.md` for the entities). This document traces a single HTTP
+`../database-schema.md` for the entities and their relationships). This document traces a single HTTP
 request through the backend: from the controller, across the **MediatR CQRS pipeline**,
 into a handler, out to Infrastructure, and back as a response.
 
