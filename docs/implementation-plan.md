@@ -321,6 +321,33 @@ FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers
 (FR-13–FR-17), charts (FR-18–FR-21), demo-session "Try the demo" entry (FR-04), and any
 base-currency conversion display — their backends don't exist yet.
 
+### Deployment fit (Railway API + DB, Vercel frontend — full deploy is item 7)
+
+The stack (axios + TanStack Query + RHF/Zod + Vite) compiles to a **static bundle with no
+server runtime**, so Vercel just serves files and Railway hosts the API/DB. Build the slice
+so this split is friction-free later — the deployment-critical pieces all live at the
+frontend↔backend seam, not in the libraries:
+
+- **API base URL is the only host reference.** Read it once from `import.meta.env.VITE_API_BASE_URL`
+  in the axios instance — never hard-code a URL elsewhere. Vite **inlines `VITE_*` vars at
+  build time**, so each environment needs its own value (local `.env` → `http://localhost:5029`;
+  Vercel prod env → the Railway API URL) and changing it requires a rebuild. Commit
+  `.env.example` documenting the var.
+- **CORS is config-driven (the F1 prereq).** Frontend and API are different origins in prod,
+  so the API must allow the Vercel origin(s) + the `Authorization` header via
+  `Cors:AllowedOrigins` (a Railway env var) — no code change between environments. ⚠️ Vercel
+  **preview deployments use dynamic `*.vercel.app` subdomains**; allow a wildcard/regex for
+  those in non-prod config, or point previews at a staging API only.
+- **Bearer-token-in-header auth (not cookies) is deliberately deploy-friendly.** Cross-site
+  Vercel↔Railway calls avoid all `SameSite`/CSRF/cookie-domain issues; the token just rides
+  in the header the axios interceptor attaches. (Accepts the usual `localStorage`/XSS
+  trade-off.)
+- **SPA fallback on Vercel.** Client-side routes need deep links / hard refreshes to serve
+  `index.html`. Add `vercel.json` with a catch-all rewrite to `/index.html` so e.g.
+  `/transactions` doesn't 404.
+- **No SSR / serverless functions** — TanStack Query is a pure client cache, so Vercel serves
+  static output only (no cold starts, no Node runtime to provision).
+
 ---
 
 ## Feature sequence after auth
