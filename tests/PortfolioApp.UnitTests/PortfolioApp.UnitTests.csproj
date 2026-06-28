@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\PortfolioApp.API\PortfolioApp.API.csproj" />
     <ProjectReference Include="..\..\src\PortfolioApp.Application\PortfolioApp.Application.csproj" />
     <ProjectReference Include="..\..\src\PortfolioApp.Domain\PortfolioApp.Domain.csproj" />
   </ItemGroup>
