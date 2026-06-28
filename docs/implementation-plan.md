@@ -6,14 +6,14 @@ the *how / in what order*. Update it as slices land.
 
 ---
 
-## Current state (2026-06-24)
+## Current state (2026-06-28)
 
 | Layer | State |
 |-------|-------|
-| **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums |
-| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, all wired in `AddInfrastructure()` |
-| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto` |
-| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware`. WeatherForecast sample removed |
+| **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
+| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**, all wired in `AddInfrastructure()` |
+| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto`; registration now **bootstraps the user's `Portfolio`** (default base currency `USD`) in the same unit of work |
+| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (now maps `NotFoundException`→404, `DomainException`→422). **`CurrentUserService`** (over `IHttpContextAccessor`) + `AddHttpContextAccessor()` wired. WeatherForecast sample removed |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
 pgAdmin (`portfolio-pgadmin`, http://localhost:5050). Credentials come from a gitignored
@@ -85,23 +85,40 @@ repeat it. The `Transactions`, `Assets`, and `Portfolios` tables already exist f
 `InitialCreate` migration — **no schema migration is needed**; this slice is Application +
 API + repository code, plus two small prerequisites.
 
-### Prerequisites (cross-cutting — do these first)
+### Prerequisites (cross-cutting) — ✅ done
 
-- **P1 — Current-user accessor.** Add an `ICurrentUserService` port in Application exposing
-  `UserId` (Guid) and, for later, `IsDemo` / `DemoSessionId`. Implement over
-  `IHttpContextAccessor` (read the `sub` claim); register `AddHttpContextAccessor()` + the
-  service in the composition root. This is the read-side of FR-03 and the basis for the
-  first enforced endpoints.
-- **P2 — Portfolio bootstrap.** Registration currently creates only a `User`, so the
-  one-portfolio-per-user invariant isn't established yet. Extend `RegisterCommandHandler`
-  to also create the user's `Portfolio` (default `BaseCurrency`, e.g. `"USD"` — settable
-  later via FR-11) in the same unit of work. Add `IPortfolioRepository`
-  (`GetByUserIdAsync`). _(Alternative: lazily ensure-portfolio inside the add-transaction
-  handler; creating it at registration is cleaner and keeps the invariant explicit —
-  recommended.)_
-- **P3 — `NotFoundException`** in `Domain/Exceptions`, mapped to **404** in
+All three landed on `feature/Transactions-CRUD-prerequisites` (build clean; 45 unit tests
+green; `dotnet ef migrations has-pending-model-changes` reports none).
+
+- ✅ **P1 — Current-user accessor.** `ICurrentUserService` port (Application) exposing
+  `UserId` (Guid), `IsDemo`, `DemoSessionId`. `CurrentUserService` impl (API) over
+  `IHttpContextAccessor`, reading the `sub` claim (with `ClaimTypes.NameIdentifier`
+  fallback, since the bearer handler maps `sub` by default); throws
+  `UnauthorizedAccessException` when absent/malformed. `AddHttpContextAccessor()` + the
+  service registered in the composition root. Unit-tested (9 tests; unit-test project now
+  references the API project). _Read-side of FR-03._
+- ✅ **P2 — Portfolio bootstrap.** `RegisterCommandHandler` now creates the user's
+  `Portfolio` (default base currency `Currency.Usd`) attached to the user aggregate, so it
+  persists in the **same unit of work** (single `SaveChanges`). `IPortfolioRepository`
+  (`GetByUserIdAsync`) + EF `PortfolioRepository` added. Unit-tested.
+- ✅ **P3 — `NotFoundException`** in `Domain/Exceptions`, mapped to **404** in
   `ExceptionHandlingMiddleware`. Used when a transaction is missing _or not owned_ by the
-  caller — return 404 (not 403) so existence isn't leaked.
+  caller — 404 (not 403) so existence isn't leaked. (Integration coverage arrives with the
+  CRUD slice, per the project's exception-mapping test convention.)
+
+### Bonus: `Currency` value object (cross-cutting cleanup done alongside the prerequisites)
+
+While bootstrapping the portfolio it was clear the raw `string` currency fields wanted a
+single typed source of truth. Added a `Currency` value object (Domain `ValueObjects/`):
+sealed record, created only via `Currency.From(code)` which validates against `Iso4217`
+codes and throws `DomainException` (→ **422**). All 7 currency properties across the
+entities now use `Currency`; persisted as the 3-char code via `CurrencyConverter`, wired
+once in `PortfolioDbContext.ConfigureConventions` — **store type unchanged (`varchar(3)`),
+so no migration**. Implications for the CRUD slice below:
+- The transaction `Currency` validator can use `Iso4217.Codes` / `Currency.From` instead of
+  a regex — one source of truth.
+- `TransactionDto` should expose currency as the `Code` **string**; the AutoMapper profile
+  maps `Currency` → `string` (and back via `Currency.From` where needed).
 
 ### Steps
 
