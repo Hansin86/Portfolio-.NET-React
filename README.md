@@ -4,10 +4,11 @@ A stock portfolio tracker demonstrating a **.NET + React** stack. A user records
 transactions; the backend fetches live market prices (Alpha Vantage) and FX rates, then
 reports portfolio value, cost basis, and profit/loss converted to a chosen base currency.
 
-> **Status:** backend solution scaffolded under Clean Architecture; the persistence layer
-> (PostgreSQL + EF Core, with an initial migration) is in place. Application use cases,
-> auth, and the React/TypeScript frontend are not yet implemented — see the
-> [implementation plan](docs/implementation-plan.md) for the roadmap.
+> **Status:** backend under Clean Architecture with the persistence layer (PostgreSQL +
+> EF Core, initial migration) and two vertical slices in place — **authentication**
+> (register/login, JWT, bcrypt) and **transactions CRUD** (add/edit/delete + filtered,
+> sorted, paged history, scoped per user). The React/TypeScript frontend is not yet in the
+> repo — see the [implementation plan](docs/implementation-plan.md) for the roadmap.
 
 ## Features
 

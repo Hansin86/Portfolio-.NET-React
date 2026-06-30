@@ -11,9 +11,9 @@ the *how / in what order*. Update it as slices land.
 | Layer | State |
 |-------|-------|
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
-| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**, all wired in `AddInfrastructure()` |
-| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**. Auth features landed: `Register`/`Login` commands + handlers + validators + `AuthResponseDto`; registration now **bootstraps the user's `Portfolio`** (default base currency `USD`) in the same unit of work |
-| **API** | ✅ `AuthController` (`register`/`login`), JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (now maps `NotFoundException`→404, `DomainException`→422). **`CurrentUserService`** (over `IHttpContextAccessor`) + `AddHttpContextAccessor()` wired. WeatherForecast sample removed |
+| **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**. **`TransactionRepository`** (filter/sort/page list + `GetHeldQuantityAsync`) + **`AssetRepository`** (get-or-create by ticker). All wired in `AddInfrastructure()` |
+| **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**, **`ITransactionRepository`**, **`IAssetRepository`**. Auth features landed (`Register`/`Login`); registration **bootstraps the user's `Portfolio`** (default base currency `USD`). **Transactions CRUD** landed: `AddTransaction`/`EditTransaction`/`DeleteTransaction` commands + `GetTransactions`/`GetTransactionById` queries (+ validators), `TransactionDto`, `PagedResult<T>`, first AutoMapper profile (`Common/Mappings/TransactionProfile`) |
+| **API** | ✅ `AuthController` (`register`/`login`) + **`TransactionsController`** (`[Authorize]` CRUD — first JWT-protected endpoints, NFR-04). JWT bearer auth + `UseAuthentication()`, global `ExceptionHandlingMiddleware` (maps `NotFoundException`→404, `DomainException`→422, `ValidationException`→400). **`CurrentUserService`** (over `IHttpContextAccessor`) wired. **`JsonStringEnumConverter`** registered so enums serialize as names. WeatherForecast sample removed |
 
 Local dev infra: `docker-compose.yml` runs Postgres (`portfolio-db`, port 5432) +
 pgAdmin (`portfolio-pgadmin`, http://localhost:5050). Credentials come from a gitignored
@@ -77,11 +77,48 @@ after auth" below.
 
 ---
 
-## Next slice: Transactions CRUD (FR-05, FR-06, FR-07)
+## ✅ Done: Transactions CRUD (FR-05, FR-06, FR-07)
 
 First per-user feature. It establishes the ownership/scoping pattern (**FR-03**) and the
 first `[Authorize]`-protected endpoints (**NFR-04** enforcement), so later features just
-repeat it. The `Transactions`, `Assets`, and `Portfolios` tables already exist from the
+repeat it. No schema migration was needed (`Transactions`/`Assets`/`Portfolios` already
+existed from `InitialCreate`). **Landed in 8 small commits; full suite green: 98 unit + 9
+integration tests.**
+
+Requirement status — what this slice delivered:
+- **FR-05** (add transaction) ✅, **FR-06** (edit/delete) ✅, **FR-07** (filter/sort/page
+  list) ✅.
+- **FR-03** (per-user isolation) ✅ — first real enforcement: every command/query resolves
+  the caller's portfolio via `ICurrentUserService` + `IPortfolioRepository` and scopes to
+  it; another user's transaction returns **404** (existence not leaked). Integration-tested.
+- **NFR-04** (JWT-protected endpoints) ✅ — `TransactionsController` is the first
+  `[Authorize]` controller; unauthenticated requests return **401**. Integration-tested.
+
+Key decisions made while building (deviations from the original plan below):
+- **Over-sell guard on Add + Edit + Delete.** Net held quantity per asset (Σ buys − Σ sells)
+  must never go negative. Implemented as `ITransactionRepository.GetHeldQuantityAsync`
+  (DB-side sum, with an optional `excludeTransactionId` for re-validating edits/deletes)
+  rather than a separate domain calculator — simpler to unit-test via the mocked port.
+  Violations throw `DomainException` → **422**. (Delete was added to the guard after the
+  initial Add+Edit scope, to keep the invariant consistent.)
+- **Paged list with total count.** `GetTransactions` returns `PagedResult<TransactionDto>`
+  (`Items`, `TotalCount`, `Page`, `PageSize`); default page size 20, **capped at 100**
+  (`GetTransactionsQueryValidator.MaxPageSize`). Default sort is `TransactionDate`
+  descending. Every sort carries a `.ThenBy(Id)` tie-breaker for deterministic paging.
+- **Ticker/asset is not editable.** `EditTransaction` changes trade details only
+  (Type/Quantity/PricePerUnit/Currency/Date); correcting a wrong ticker means delete +
+  re-add. Keeps the over-sell guard single-asset.
+- **`JsonStringEnumConverter` registered globally** so the JSON contract uses enum names
+  (`"Buy"`/`"Sell"`, `"Stock"`/`"Etf"`) instead of integers.
+- **PUT returns 200** with the updated `TransactionDto`; **POST returns 201** + `Location`
+  (`CreatedAtAction` → `GET /{id}`); **DELETE returns 204**.
+- **Asset get-or-create** seeds interim metadata (`Name = Ticker`, `QuoteCurrency =`
+  transaction currency, `AssetType` from request or `Stock`) — real metadata arrives with
+  FR-08.
+
+### Original plan (for reference)
+
+The `Transactions`, `Assets`, and `Portfolios` tables already exist from the
 `InitialCreate` migration — **no schema migration is needed**; this slice is Application +
 API + repository code, plus two small prerequisites.
 
@@ -188,43 +225,135 @@ and establishes the patterns (API client, auth/token handling, routing, forms) t
 later UI screen reuses. The dashboard and chart screens stay deferred until their backends
 (FR-13–FR-21) exist — see the revised sequence below.
 
+### Stack decisions (proposed defaults — adjust before starting)
+
+| Concern | Choice | Why |
+|---------|--------|-----|
+| Tooling | **Vite + React + TypeScript**, app under `frontend/` | Fast dev server; keeps the SPA out of the .NET source tree |
+| HTTP | **axios** instance with interceptors | Clean place to attach the bearer token and centralize 401 handling |
+| Server state | **TanStack Query (React Query)** | Caching, loading/error/empty states, and cache invalidation for the transactions list/mutations — removes hand-rolled fetch boilerplate |
+| Auth/session state | **React Context** + `localStorage` | One token + user; no need for Redux at this size |
+| Forms + validation | **React Hook Form + Zod** | Zod schemas mirror the backend rules (password policy, transaction fields) as a single client-side source of truth |
+| Routing | **React Router** | Public vs. protected route split |
+| Styling | **CSS Modules** (minimal) | Keep the first slice lean; a UI kit can come later |
+| Tests | **Vitest + React Testing Library + MSW** | Mock the API at the network layer for component/integration tests |
+
+### API contract the client codes against (as built in the Transactions slice)
+
+- **Base URL** from `.env` (`VITE_API_BASE_URL`), e.g. `http://localhost:5029`.
+- **Auth:** `POST /auth/register` and `POST /auth/login`, both bodies `{ email, password }`,
+  both **200** returning `AuthResponseDto { userId, email, token }` (camelCase JSON). No
+  refresh endpoint — treat token expiry / any `401` as "log in again."
+- **Transactions** (all require `Authorization: Bearer <jwt>`):
+  - `POST /transactions` → **201** + `Location`; body
+    `{ ticker, type, quantity, pricePerUnit, currency, transactionDate, assetType? }`.
+  - `GET /transactions` → **200** `PagedResult<TransactionDto>`
+    `{ items, totalCount, page, pageSize }`; query params `assetTicker?, type?, fromDate?,
+    toDate?, sortBy?, descending?, page?, pageSize?` (FR-07).
+  - `GET /transactions/{id}` → **200 / 404**.
+  - `PUT /transactions/{id}` → **200** (body without `id`: `{ type, quantity, pricePerUnit,
+    currency, transactionDate }`).
+  - `DELETE /transactions/{id}` → **204**.
+- **Enums are strings** (`type` = `"Buy"`/`"Sell"`, `assetType` = `"Stock"`/`"Etf"`,
+  `sortBy` = `"TransactionDate" | "Ticker" | "Quantity" | "PricePerUnit" | "Type"`).
+- **Errors are RFC 7807 `application/problem+json`:** `400` validation (a
+  `ValidationProblemDetails` with an `errors` map keyed by field), `401` unauthorized,
+  `404` not found (also returned for another user's resource — FR-03), `409` duplicate email,
+  `422` business-rule violations (e.g. over-sell / negative-holding guard). The client should
+  map `400.errors` to per-field form errors and surface `409`/`422` `detail` as a form-level
+  message.
+- `transactionDate` and the date filters are ISO `YYYY-MM-DD` strings; monetary values are
+  numbers in the transaction's original `currency` (no base-currency conversion yet —
+  that arrives with FR-13–FR-17).
+
 ### Prerequisites (cross-cutting — do these first)
 
-- **F1 — CORS.** Add an ASP.NET Core CORS policy allowing the frontend dev origin
-  (Vite default `http://localhost:5173`); read allowed origins from config so prod can
-  differ.
-- **F2 — Auth contract check.** Confirm `AuthResponseDto` (JWT + `UserId`/`Email`) is what
-  the client needs to bootstrap a session; no token-refresh endpoint exists (stateless
-  JWT), so the client treats expiry as "log in again."
+- **F1 — CORS (backend change).** Add an ASP.NET Core CORS policy in `Program.cs` allowing
+  the frontend dev origin (Vite default `http://localhost:5173`) with the `Authorization`
+  header; read allowed origins from config (`Cors:AllowedOrigins`) so prod can differ. Wire
+  `app.UseCors(...)` **before** auth middleware. Add a small integration check that a
+  preflight `OPTIONS` from the allowed origin succeeds.
+- **F2 — Auth contract check.** ✅ Confirmed: `AuthResponseDto { userId, email, token }` is
+  all the client needs to bootstrap a session; stateless JWT, no refresh — expiry ⇒ re-login.
 
-### Steps
+### Steps (small commits)
 
-1. **Scaffold.** Vite + React + TypeScript app under `frontend/` (or `src/web/`). Add
-   ESLint/Prettier, an `.env` for the API base URL, and an npm scripts baseline
-   (`dev`/`build`/`lint`/`test`). Commit a README note on running it alongside the API.
-2. **API client + auth.** Typed `fetch`/axios client with a base URL and a request
-   interceptor that attaches the `Authorization: Bearer <jwt>` header. Auth context/store
-   holding the token + user; persist to `localStorage`; redirect to login on `401`.
-3. **Routing + layout.** React Router with public routes (`/login`, `/register`) and a
-   protected-route wrapper guarding the app shell. Minimal layout (nav + sign-out).
-4. **Auth screens (FR-01, FR-02).** Register and login forms with client-side validation
-   mirroring the backend password policy; surface API errors (409 duplicate email, 401 bad
-   credentials, 400 validation). Sign-out clears the stored token.
-5. **Transactions UI (FR-05, FR-06, FR-07).** Transactions list with sort + filter
-   (by asset/date) backed by `GET /transactions`; add/edit transaction form
-   (`POST`/`PUT`); delete with confirm. Loading/empty/error states.
-6. **Tests + CI.** Component/integration tests (Vitest + React Testing Library); extend the
-   GitHub Actions workflow (NFR-07) with a frontend job (install → lint → build → test).
+1. **Scaffold + tooling.** Vite React-TS app under `frontend/`. Add ESLint + Prettier,
+   `.env`/`.env.example` (`VITE_API_BASE_URL`), npm scripts (`dev`/`build`/`lint`/`test`),
+   and a `frontend/README.md` note on running it alongside the API. `.gitignore` for
+   `node_modules`/`dist`. _Commit: empty app boots._
+2. **Types + API client.** Hand-written TS types mirroring the contract above
+   (`AuthResponse`, `TransactionDto`, `PagedResult<T>`, `TransactionType`, `AssetType`,
+   `SortField`, a `ProblemDetails`/`ValidationProblemDetails` shape). An axios instance with
+   the base URL, a request interceptor attaching the bearer token, and a response interceptor
+   that normalizes problem-details errors and signals `401` for global handling.
+   _Commit: typed client, no UI yet._
+3. **Auth context + session.** `AuthProvider` (token + user in state, persisted to
+   `localStorage`, hydrated on load) exposing `login`/`register`/`logout`; on a `401` from the
+   client, clear session and redirect to `/login`. Wire TanStack Query's `QueryClientProvider`.
+   _Commit: session plumbing._
+4. **Routing + layout.** React Router with public `/login`, `/register` and a
+   `RequireAuth` wrapper guarding the app shell (nav + sign-out + the transactions route).
+   Redirect authenticated users away from the auth pages. _Commit: navigable shell._
+5. **Auth screens (FR-01, FR-02).** Register + login forms (React Hook Form + Zod mirroring
+   the **12–128 char, upper/lower/digit, no-whitespace** password policy). Map `400.errors`
+   to fields; show `409` (duplicate email) and `401` (bad credentials) as form-level errors.
+   Sign-out clears the stored token. _Commit: working auth UI._
+6. **Transactions list (FR-07).** Table backed by `GET /transactions` via a `useTransactions`
+   query hook; filter (ticker, type, date range) + sort (column headers → `sortBy`/`descending`)
+   + paging (`page`/`pageSize`, render `totalCount`). Loading / empty / error states.
+   _Commit: read UI._
+7. **Transactions create/edit/delete (FR-05, FR-06).** Add/edit form (Zod: quantity > 0,
+   price > 0, ISO-4217 currency, ticker ≤ 20, no future date) → `POST`/`PUT` mutations;
+   delete with a confirm dialog → `DELETE`. Invalidate the list query on success; surface
+   `422` guard violations (over-sell / negative holding) as a form-level error.
+   _Commit: full CRUD UI._
+8. **Component/integration tests.** Vitest + RTL + MSW: auth form validation + error mapping,
+   protected-route redirect, transactions list (filter/sort/paging), and the create→list and
+   delete flows against mocked endpoints. _Commit: frontend tests green._
+9. **CI (NFR-07).** Extend `.github/workflows/ci.yml` with a frontend job
+   (`install → lint → build → test`), path-filtered to `frontend/**`. _Commit: CI covers FE._
 
 **Requirements this slice moves:** FR-01/FR-02 → usable UI (incl. logout in the client);
 FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers the frontend.
+
+**Out of scope (deferred to later slices):** dashboard/portfolio-summary screens
+(FR-13–FR-17), charts (FR-18–FR-21), demo-session "Try the demo" entry (FR-04), and any
+base-currency conversion display — their backends don't exist yet.
+
+### Deployment fit (Railway API + DB, Vercel frontend — full deploy is item 7)
+
+The stack (axios + TanStack Query + RHF/Zod + Vite) compiles to a **static bundle with no
+server runtime**, so Vercel just serves files and Railway hosts the API/DB. Build the slice
+so this split is friction-free later — the deployment-critical pieces all live at the
+frontend↔backend seam, not in the libraries:
+
+- **API base URL is the only host reference.** Read it once from `import.meta.env.VITE_API_BASE_URL`
+  in the axios instance — never hard-code a URL elsewhere. Vite **inlines `VITE_*` vars at
+  build time**, so each environment needs its own value (local `.env` → `http://localhost:5029`;
+  Vercel prod env → the Railway API URL) and changing it requires a rebuild. Commit
+  `.env.example` documenting the var.
+- **CORS is config-driven (the F1 prereq).** Frontend and API are different origins in prod,
+  so the API must allow the Vercel origin(s) + the `Authorization` header via
+  `Cors:AllowedOrigins` (a Railway env var) — no code change between environments. ⚠️ Vercel
+  **preview deployments use dynamic `*.vercel.app` subdomains**; allow a wildcard/regex for
+  those in non-prod config, or point previews at a staging API only.
+- **Bearer-token-in-header auth (not cookies) is deliberately deploy-friendly.** Cross-site
+  Vercel↔Railway calls avoid all `SameSite`/CSRF/cookie-domain issues; the token just rides
+  in the header the axios interceptor attaches. (Accepts the usual `localStorage`/XSS
+  trade-off.)
+- **SPA fallback on Vercel.** Client-side routes need deep links / hard refreshes to serve
+  `index.html`. Add `vercel.json` with a catch-all rewrite to `/index.html` so e.g.
+  `/transactions` doesn't 404.
+- **No SSR / serverless functions** — TanStack Query is a pure client cache, so Vercel serves
+  static output only (no cold starts, no Node runtime to provision).
 
 ---
 
 ## Feature sequence after auth
 
-1. **Transactions CRUD** (FR-05, FR-06, FR-07) — _detailed steps above._ First real
-   per-user feature; exercises the auth/ownership pattern.
+1. ✅ **Transactions CRUD** (FR-05, FR-06, FR-07) — _done; see the slice section above._
+   First real per-user feature; established the auth/ownership pattern.
 2. **Frontend foundation + auth & transactions UI** (FR-01, FR-02, FR-05–FR-07; NFR-06) —
    _detailed steps above._ React/TS app, API client + auth, and the transactions UI —
    first working end-to-end slice. Later UI screens (dashboard, charts) layer on as their
@@ -249,6 +378,10 @@ FR-05/06/07 → usable UI; NFR-06 → frontend in the repo; NFR-07 → CI covers
   build + unit + integration tests on push / PRs to main. On branch
   `ci/github-actions-pipeline`, active once merged.
 - **OpenAPI/Scalar (NFR-01)** — already scaffolded; keep endpoints documented as they land.
+- **Align EF Core package versions (cleanup)** — the unit-test project surfaces an
+  `MSB3277` conflict between `Microsoft.EntityFrameworkCore.Relational` 10.0.4 and 10.0.9
+  (pulled in transitively via the API/Infrastructure references). Harmless today; pin a
+  single version across projects to clear the warning.
 
 ---
 

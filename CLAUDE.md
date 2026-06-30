@@ -15,9 +15,12 @@ See `docs/architecture/architecture-cross-cutting.md`, `docs/architecture/archit
 `docs/architecture/architecture-layers.md`, `docs/architecture/architecture-request-lifecycle.md`, 
 `docs/architecture/architecture-tech-stack.md` for full architecture description in project.
 
-Current state: backend solution scaffolded from templates (the only non-trivial code is
-the default `WeatherForecast` sample, which should be removed as real features land).
-The React/TypeScript frontend is not yet in the repo.
+Current state: backend has two vertical slices landed — **Authentication** (register/login,
+JWT bearer, bcrypt hashing) and **Transactions CRUD** (add/edit/delete + filtered/sorted/
+paged list, the first `[Authorize]` endpoints with per-user scoping). The full pipeline is
+wired (MediatR + FluentValidation `ValidationBehaviour` + AutoMapper + global exception
+middleware). The `WeatherForecast` sample has been removed. The React/TypeScript frontend is
+not yet in the repo. See `docs/implementation-plan.md` for the roadmap and what's next.
 
 ## Commands
 
