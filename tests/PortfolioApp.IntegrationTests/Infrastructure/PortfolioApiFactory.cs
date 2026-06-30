@@ -1,11 +1,8 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 using PortfolioApp.Infrastructure.Identity;
 using PortfolioApp.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
@@ -45,14 +42,21 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // The container is started by InitializeAsync before the host is built, so its connection
-        // string is available here. Overrides are applied at the service level (rather than via
-        // configuration) so they don't depend on when the host merges test configuration: in
-        // particular Program.cs reads the JWT settings eagerly while building the bearer options,
-        // before any injected configuration is visible.
+        // string is available here. Overrides are applied at the service level so they don't
+        // depend on when the host merges test configuration.
         builder.ConfigureTestServices(services =>
         {
             ReplaceDbContext(services);
-            ConfigureJwt(services);
+
+            // The app builds bearer validation from JwtSettings via the options system, so
+            // overriding the settings here aligns both token issuance and validation with the
+            // test signing key.
+            services.Configure<JwtSettings>(s =>
+            {
+                s.Key = TestSigningKey;
+                s.Issuer = TestIssuer;
+                s.Audience = TestAudience;
+            });
         });
     }
 
@@ -64,35 +68,6 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
         services.Remove(options);
 
         services.AddDbContext<PortfolioDbContext>(o => o.UseNpgsql(_database.GetConnectionString()));
-    }
-
-    /// <summary>
-    /// Aligns both sides of JWT auth with the test signing key: the token generator
-    /// (<see cref="JwtSettings"/> via options) and the bearer validation parameters, which
-    /// Program.cs builds eagerly from configuration the test host hasn't merged yet.
-    /// </summary>
-    private static void ConfigureJwt(IServiceCollection services)
-    {
-        services.Configure<JwtSettings>(s =>
-        {
-            s.Key = TestSigningKey;
-            s.Issuer = TestIssuer;
-            s.Audience = TestAudience;
-        });
-
-        services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = TestIssuer,
-                ValidAudience = TestAudience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSigningKey)),
-            };
-        });
     }
 
     async Task IAsyncLifetime.DisposeAsync()
