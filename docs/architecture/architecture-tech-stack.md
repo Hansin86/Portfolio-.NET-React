@@ -76,7 +76,11 @@ No external packages — by design. Pure C# entities, enums, and exceptions.
   mocked ports.
 - **`tests/PortfolioApp.IntegrationTests`** — references API + Infrastructure; drives the
   real API via `WebApplicationFactory` against a Testcontainers PostgreSQL instance
-  (Docker must be running).
+  (Docker must be running). Each factory injects its per-host config (container connection
+  string, JWT settings) through `ConfigureTestServices` rather than process-global
+  environment variables, so factories share no process state and test collections run in
+  parallel safely. JWT validation is overridden via `JwtSettings` (not `JwtBearerOptions`)
+  because `Program.cs` builds the bearer parameters from those options.
 
 ---
 

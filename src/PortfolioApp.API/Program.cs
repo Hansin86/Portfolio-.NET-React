@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PortfolioApp.API.Middleware;
 using PortfolioApp.API.Services;
@@ -16,7 +18,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    // Serialize/accept enums as their string names (e.g. "Buy"/"Sell") rather than integers,
+    // so the JSON contract is self-describing.
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -28,14 +34,19 @@ builder.Services.AddApplication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-JwtSettings jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
-    ?? throw new InvalidOperationException(
-        $"Configuration section '{JwtSettings.SectionName}' is missing or invalid.");
-
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer();
+
+// Build the bearer validation parameters from JwtSettings resolved through the options system
+// (bound to the "Jwt" section in AddInfrastructure). Reading the settings here — when the bearer
+// options are materialised — rather than eagerly off IConfiguration while the host is still being
+// built keeps validation aligned with the final, merged configuration.
+builder.Services
+    .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtSettings>>((options, jwtSettingsAccessor) =>
     {
+        JwtSettings jwtSettings = jwtSettingsAccessor.Value;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

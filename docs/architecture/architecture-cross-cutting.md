@@ -8,17 +8,17 @@ authentication, validation, error handling, logging, and API documentation.
 ```mermaid
 flowchart TD
     REQ["HTTP request"] --> LOG["Serilog request logging (planned)"]
-    LOG --> EXC["Exception middleware (planned)"]
-    EXC --> AUTH["JWT auth + authorization (planned)"]
+    LOG --> EXC["Exception middleware (wired)"]
+    EXC --> AUTH["JWT auth + authorization (wired)"]
     AUTH --> PIPE["MediatR pipeline"]
-    PIPE --> VAL["Validation behavior (planned)"]
+    PIPE --> VAL["Validation behavior (wired)"]
     VAL --> HANDLER["Handler"]
     DOCS["OpenAPI + Scalar (wired)"] -. "describes endpoints" .-> AUTH
 ```
 
 ---
 
-## Authentication & authorization — JWT *(planned)*
+## Authentication & authorization — JWT *(wired)*
 
 - **Scheme:** JWT bearer. NFR-04 requires **all** endpoints protected, except the public
   entry points (`register`, `login`, `demo`).
@@ -30,36 +30,46 @@ flowchart TD
   read identity from those claims to scope data per user (FR-03).
 - **Demo claims:** demo tokens carry `is_demo = true` and `demo_session_id`, used to route
   requests to the isolated demo portfolio.
-- **Current state:** `Program.cs` calls `UseAuthorization()` but **no authentication
-  scheme is registered yet**, and `UseAuthentication()` is not yet in the pipeline. The
-  `Microsoft.AspNetCore.Authentication.JwtBearer` package is referenced.
+- **Current state:** **wired.** `Program.cs` registers
+  `AddAuthentication().AddJwtBearer(...)` with `TokenValidationParameters` from `JwtSettings`,
+  and the pipeline calls `UseAuthentication()` then `UseAuthorization()`. `IJwtTokenGenerator`
+  (HMAC-SHA256) and bcrypt `IPasswordHasher` are implemented in Infrastructure;
+  `ICurrentUserService` (over `IHttpContextAccessor`) exposes the caller's id from the `sub`
+  claim. `TransactionsController` is the first `[Authorize]` controller. Demo claims (FR-04)
+  not issued yet.
 
-## Input validation — FluentValidation *(planned)*
+## Input validation — FluentValidation *(wired)*
 
 - A MediatR **pipeline behavior** (in `Application/Common/Behaviours/`) runs all
   registered validators before the handler executes; failures throw `ValidationException`,
   surfaced as `400` by the exception middleware.
 - Validators live next to their command/query. Handlers can then assume valid input.
-- **Current state:** `Common/Behaviours/` exists but is empty; the
-  `FluentValidation.DependencyInjectionExtensions` package is referenced in Application.
+- **Current state:** **wired.** `Common/Behaviours/ValidationBehaviour<,>` is registered as
+  an open MediatR pipeline behavior in `AddApplication()`; validators are auto-registered from
+  the Application assembly (auth + transactions validators in place). Failures throw
+  `ValidationException`, mapped to `400` by the exception middleware.
 
-## Error handling — exception middleware *(planned)*
+## Error handling — exception middleware *(wired)*
 
 - A single middleware wraps the pipeline and converts exceptions into consistent
   **problem-details JSON** instead of leaking stack traces.
 - Custom exceptions in `Domain/Exceptions/` map to status codes (e.g. not-found → 404,
   validation → 400, unauthorized → 401). This keeps `try/catch` out of controllers and
   handlers.
-- **Current state:** the `API/Middleware/` and `Domain/Exceptions/` folders exist but are
-  empty.
+- **Current state:** **wired.** `API/Middleware/ExceptionHandlingMiddleware` converts
+  exceptions into RFC 7807 `problem+json`: `ValidationException`→400,
+  `EmailAlreadyInUseException`→409, `InvalidCredentialsException`→401, `NotFoundException`→404,
+  `DomainException`→422, else 500. Custom exceptions live in `Domain/Exceptions/`.
 
-## Object mapping — AutoMapper *(planned)*
+## Object mapping — AutoMapper *(wired)*
 
 - Entity ↔ DTO mapping is centralized in AutoMapper profiles under
   `Application/Common/Mappings/`, so handlers return DTOs and entities never cross the API
   boundary.
-- **Current state:** `Common/Mappings/` exists but is empty; AutoMapper is referenced in
-  Application, Infrastructure, and API.
+- **Current state:** **wired.** AutoMapper is registered from the Application assembly in
+  `AddApplication()`; `Common/Mappings/TransactionProfile` is the first profile (flattens
+  `Asset` ticker/name and exposes the `Currency` value object as its code string). More
+  profiles land with each feature.
 
 ## Logging — Serilog *(planned)*
 
@@ -83,16 +93,15 @@ flowchart TD
 
 ## Where each concern is wired
 
-All cross-cutting wiring lives in the **API composition root** (`Program.cs` plus
-`API/Extensions/` DI helpers), pulling in `AddApplication()` *(planned)* and
-`AddInfrastructure()` *(wired)*. That keeps registration in one place and the dependency
-flow one-directional (see `architecture-layers.md`).
+All cross-cutting wiring lives in the **API composition root** (`Program.cs`), pulling in
+`AddApplication()` *(wired)* and `AddInfrastructure()` *(wired)*. That keeps registration in
+one place and the dependency flow one-directional (see `architecture-layers.md`).
 
 | Concern | Layer it's defined in | Layer it's implemented/wired in | Status |
 |---------|----------------------|---------------------------------|--------|
-| JWT auth | Application (port) | Infrastructure + API | planned |
-| Validation behavior | Application | Application + API (DI) | planned |
-| Exception middleware | API | API | planned |
-| AutoMapper profiles | Application | Application + API (DI) | planned |
+| JWT auth | Application (port) | Infrastructure + API | wired |
+| Validation behavior | Application | Application + API (DI) | wired |
+| Exception middleware | API | API | wired |
+| AutoMapper profiles | Application | Application + API (DI) | wired |
 | Serilog logging | — | API | planned |
 | OpenAPI + Scalar | — | API | wired |
