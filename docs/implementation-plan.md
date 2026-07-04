@@ -268,11 +268,13 @@ later UI screen reuses. The dashboard and chart screens stay deferred until thei
 
 ### Prerequisites (cross-cutting — do these first)
 
-- **F1 — CORS (backend change).** Add an ASP.NET Core CORS policy in `Program.cs` allowing
-  the frontend dev origin (Vite default `http://localhost:5173`) with the `Authorization`
-  header; read allowed origins from config (`Cors:AllowedOrigins`) so prod can differ. Wire
-  `app.UseCors(...)` **before** auth middleware. Add a small integration check that a
-  preflight `OPTIONS` from the allowed origin succeeds.
+- ✅ **F1 — CORS (backend change).** `SpaCors` policy in `Program.cs`: origins read from
+  config (`Cors:AllowedOrigins`, defaulting to the Vite dev origin `http://localhost:5173`
+  when unset), `AllowAnyHeader` (covers `Authorization`) + `AllowAnyMethod`; no credentials
+  (bearer token rides in the header, not cookies). `app.UseCors(...)` wired **before** auth
+  middleware. `Cors:AllowedOrigins` documented in `appsettings.json`. Integration-tested
+  (`Cors/CorsTests`): preflight `OPTIONS` from the allowed origin is echoed the
+  allow-origin header; an unlisted origin is not.
 - **F2 — Auth contract check.** ✅ Confirmed: `AuthResponseDto { userId, email, token }` is
   all the client needs to bootstrap a session; stateless JWT, no refresh — expiry ⇒ re-login.
 

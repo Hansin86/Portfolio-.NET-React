@@ -26,6 +26,21 @@ builder.Services.AddControllers()
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Allow the SPA (a different origin in dev and prod) to call the API. Origins are
+// config-driven (Cors:AllowedOrigins) so each environment supplies its own; the Vite dev
+// server default is used when none are configured. Bearer-token auth rides in the
+// Authorization header (no cookies), so credentials aren't allowed.
+const string SpaCorsPolicy = "SpaCors";
+string[] allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins").Get<string[]>() is { Length: > 0 } configured
+        ? configured
+        : ["http://localhost:5173"];
+builder.Services.AddCors(options =>
+    options.AddPolicy(SpaCorsPolicy, policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
+
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
 
@@ -72,6 +87,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Must run before auth so CORS headers are applied to preflight (OPTIONS) requests and to
+// responses on the authenticated endpoints the SPA calls.
+app.UseCors(SpaCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
