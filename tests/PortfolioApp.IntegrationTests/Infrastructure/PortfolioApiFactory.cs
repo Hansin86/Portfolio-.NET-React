@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PortfolioApp.Infrastructure.Identity;
 using PortfolioApp.Infrastructure.Persistence;
@@ -43,17 +42,14 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // The container is started by InitializeAsync before the host is built, so its connection
-        // string is available here. Supplying it as configuration means Infrastructure's
-        // AddInfrastructure resolves it like production would — without it, startup throws
-        // "Connection string 'Default' was not found." in environments (e.g. CI) that lack the
+        // string is available here. It must be supplied via UseSetting (not ConfigureAppConfiguration):
+        // AddInfrastructure reads GetConnectionString("Default") during Program.cs service
+        // registration, which runs BEFORE builder.Build() — the point at which ConfigureAppConfiguration
+        // callbacks are applied. UseSetting lands in the host configuration that CreateBuilder reads
+        // up front, so AddInfrastructure resolves it like production would. Without this, startup
+        // throws "Connection string 'Default' was not found." in environments (e.g. CI) that lack the
         // user-secrets fallback used locally.
-        builder.ConfigureAppConfiguration(config =>
-        {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Default"] = _database.GetConnectionString(),
-            });
-        });
+        builder.UseSetting("ConnectionStrings:Default", _database.GetConnectionString());
 
         builder.ConfigureTestServices(services =>
         {

@@ -4,7 +4,8 @@
       "PowerShell(dotnet build *)",
       "Bash(dotnet test *)",
       "Bash(dotnet build *)",
-      "Bash(docker info *)"
+      "Bash(docker info *)",
+      "Bash(env)"
     ]
   }
 }
