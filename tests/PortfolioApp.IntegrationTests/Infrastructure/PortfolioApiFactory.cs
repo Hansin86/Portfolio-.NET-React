@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PortfolioApp.Infrastructure.Identity;
 using PortfolioApp.Infrastructure.Persistence;
@@ -42,12 +43,20 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // The container is started by InitializeAsync before the host is built, so its connection
-        // string is available here. Overrides are applied at the service level so they don't
-        // depend on when the host merges test configuration.
+        // string is available here. Supplying it as configuration means Infrastructure's
+        // AddInfrastructure resolves it like production would — without it, startup throws
+        // "Connection string 'Default' was not found." in environments (e.g. CI) that lack the
+        // user-secrets fallback used locally.
+        builder.ConfigureAppConfiguration(config =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] = _database.GetConnectionString(),
+            });
+        });
+
         builder.ConfigureTestServices(services =>
         {
-            ReplaceDbContext(services);
-
             // The app builds bearer validation from JwtSettings via the options system, so
             // overriding the settings here aligns both token issuance and validation with the
             // test signing key.
@@ -58,16 +67,6 @@ public class PortfolioApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
                 s.Audience = TestAudience;
             });
         });
-    }
-
-    /// <summary>Repoints <see cref="PortfolioDbContext"/> at this factory's container.</summary>
-    private void ReplaceDbContext(IServiceCollection services)
-    {
-        ServiceDescriptor options = services.Single(
-            d => d.ServiceType == typeof(DbContextOptions<PortfolioDbContext>));
-        services.Remove(options);
-
-        services.AddDbContext<PortfolioDbContext>(o => o.UseNpgsql(_database.GetConnectionString()));
     }
 
     async Task IAsyncLifetime.DisposeAsync()
