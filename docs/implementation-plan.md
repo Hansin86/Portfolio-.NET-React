@@ -10,7 +10,7 @@ the *how / in what order*. Update it as slices land.
 
 | Layer | State |
 |-------|-------|
-| **Frontend** | 🚧 Scaffolded (step 1 of the frontend slice): Vite 8 + React 19 + TS app under `frontend/`, oxlint + Prettier + Vitest tooling, `VITE_API_BASE_URL` env, dev server on :5173. No app code yet (typed client / auth / UI are steps 2–9) |
+| **Frontend** | 🚧 Frontend slice in progress (steps 1–2 done): Vite 8 + React 19 + TS app under `frontend/`, oxlint + Prettier + Vitest tooling, `VITE_API_BASE_URL` env, dev server on :5173. **Typed API client** landed (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions` endpoint fns, axios interceptors for bearer token + global 401). No UI yet (auth/session, routing, screens are steps 3–9) |
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
 | **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**. **`TransactionRepository`** (filter/sort/page list + `GetHeldQuantityAsync`) + **`AssetRepository`** (get-or-create by ticker). All wired in `AddInfrastructure()` |
 | **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**, **`ITransactionRepository`**, **`IAssetRepository`**. Auth features landed (`Register`/`Login`); registration **bootstraps the user's `Portfolio`** (default base currency `USD`). **Transactions CRUD** landed: `AddTransaction`/`EditTransaction`/`DeleteTransaction` commands + `GetTransactions`/`GetTransactionById` queries (+ validators), `TransactionDto`, `PagedResult<T>`, first AutoMapper profile (`Common/Mappings/TransactionProfile`) |
@@ -294,11 +294,20 @@ later UI screen reuses. The dashboard and chart screens stay deferred until thei
    `node_modules`/`dist`; `.env` ignored, `.env.example` tracked (verified). Verified:
    `format`/`lint`/`build`/`test` green, dev server boots on :5173 (HTTP 200). _Commit:
    empty app boots._
-2. **Types + API client.** Hand-written TS types mirroring the contract above
-   (`AuthResponse`, `TransactionDto`, `PagedResult<T>`, `TransactionType`, `AssetType`,
-   `SortField`, a `ProblemDetails`/`ValidationProblemDetails` shape). An axios instance with
-   the base URL, a request interceptor attaching the bearer token, and a response interceptor
-   that normalizes problem-details errors and signals `401` for global handling.
+2. ✅ **Types + API client.** All under `frontend/src/api/`. Contract types split across two
+   files: **`types.ts`** (response/domain shapes + enums — `AuthResponse`, `TransactionDto`,
+   `PagedResult<T>`, `TransactionType`/`AssetType`/`SortField`, `ProblemDetails`/
+   `ValidationProblemDetails`) and **`requests.ts`** (request payloads — `Register`/`Login`/
+   `Create`/`Update`Request, `TransactionQuery`). **`client.ts`** is the single axios instance
+   (base URL from `VITE_API_BASE_URL`) with a request interceptor attaching the bearer token
+   and a response interceptor that normalizes errors + fires a global 401 handler; token and
+   401 handler are injected via `setAuthToken()`/`setUnauthorizedHandler()` so the client stays
+   decoupled from the session layer (step 3 plugs into those seams — no `localStorage`/router
+   coupling here). **`errors.ts`** — `ApiError` (`status`/`problem`/`validationErrors`,
+   `isValidation`/`isUnauthorized`) + `normalizeError()` collapsing RFC 7807 bodies, network/
+   CORS failures, and unknowns into one shape. **`auth.ts`**/**`transactions.ts`** — thin typed
+   per-endpoint functions; **`index.ts`** barrel. `src/vite-env.d.ts` types
+   `import.meta.env.VITE_API_BASE_URL`. Verified: `format`/`lint`/`build` green.
    _Commit: typed client, no UI yet._
 3. **Auth context + session.** `AuthProvider` (token + user in state, persisted to
    `localStorage`, hydrated on load) exposing `login`/`register`/`logout`; on a `401` from the
