@@ -6,10 +6,11 @@ the *how / in what order*. Update it as slices land.
 
 ---
 
-## Current state (2026-06-28)
+## Current state (2026-07-07)
 
 | Layer | State |
 |-------|-------|
+| **Frontend** | 🚧 Scaffolded (step 1 of the frontend slice): Vite 8 + React 19 + TS app under `frontend/`, oxlint + Prettier + Vitest tooling, `VITE_API_BASE_URL` env, dev server on :5173. No app code yet (typed client / auth / UI are steps 2–9) |
 | **Domain** | ✅ All 7 entities (`User`, `Portfolio`, `DemoSession`, `Asset`, `Transaction`, `PriceSnapshot`, `FxRate`) + enums. **`Currency` value object** (`ValueObjects/Currency.cs` + `Iso4217` code set) replaces the raw currency strings on all entities. Exceptions: `EmailAlreadyInUse`, `InvalidCredentials`, **`NotFoundException`**, **`DomainException`** |
 | **Infrastructure** | ✅ `PortfolioDbContext`, EF configurations, DI registration + initial migration. **`CurrencyConverter`** wired via `ConfigureConventions` (keeps `varchar(3)` — no migration). Auth ports implemented: bcrypt `PasswordHasher`, `JwtTokenGenerator` (+ `JwtSettings`), `UserRepository`, **`PortfolioRepository`**. **`TransactionRepository`** (filter/sort/page list + `GetHeldQuantityAsync`) + **`AssetRepository`** (get-or-create by ticker). All wired in `AddInfrastructure()` |
 | **Application** | ✅ Pipeline wired (`AddApplication()`: MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Auth ports defined + **`ICurrentUserService`**, **`IPortfolioRepository`**, **`ITransactionRepository`**, **`IAssetRepository`**. Auth features landed (`Register`/`Login`); registration **bootstraps the user's `Portfolio`** (default base currency `USD`). **Transactions CRUD** landed: `AddTransaction`/`EditTransaction`/`DeleteTransaction` commands + `GetTransactions`/`GetTransactionById` queries (+ validators), `TransactionDto`, `PagedResult<T>`, first AutoMapper profile (`Common/Mappings/TransactionProfile`) |
@@ -230,6 +231,7 @@ later UI screen reuses. The dashboard and chart screens stay deferred until thei
 | Concern | Choice | Why |
 |---------|--------|-----|
 | Tooling | **Vite + React + TypeScript**, app under `frontend/` | Fast dev server; keeps the SPA out of the .NET source tree |
+| Lint / format | **oxlint + Prettier** (was ESLint) | Current Vite scaffold ships oxlint; kept it — fast, zero extra config |
 | HTTP | **axios** instance with interceptors | Clean place to attach the bearer token and centralize 401 handling |
 | Server state | **TanStack Query (React Query)** | Caching, loading/error/empty states, and cache invalidation for the transactions list/mutations — removes hand-rolled fetch boilerplate |
 | Auth/session state | **React Context** + `localStorage` | One token + user; no need for Redux at this size |
@@ -280,10 +282,18 @@ later UI screen reuses. The dashboard and chart screens stay deferred until thei
 
 ### Steps (small commits)
 
-1. **Scaffold + tooling.** Vite React-TS app under `frontend/`. Add ESLint + Prettier,
-   `.env`/`.env.example` (`VITE_API_BASE_URL`), npm scripts (`dev`/`build`/`lint`/`test`),
-   and a `frontend/README.md` note on running it alongside the API. `.gitignore` for
-   `node_modules`/`dist`. _Commit: empty app boots._
+1. ✅ **Scaffold + tooling.** Vite React-TS app under `frontend/` (Vite 8 + React 19 +
+   TypeScript). Tooling: **oxlint** for linting (the current Vite scaffold ships oxlint,
+   not ESLint — kept it rather than swapping in ESLint) + **Prettier** for formatting
+   (`.prettierrc.json`/`.prettierignore`); **Vitest** wired now (config in `vite.config.ts`,
+   jsdom env) so the `test` script exists — RTL + MSW arrive in step 8. `.env`/`.env.example`
+   (`VITE_API_BASE_URL=http://localhost:5029`); npm scripts (`dev`/`build`/`preview`/`lint`/
+   `format`/`format:check`/`test` [`--passWithNoTests`]/`test:watch`); dev server pinned to
+   **port 5173** in `vite.config.ts` to match the API's `SpaCors` origin. `frontend/README.md`
+   documents setup + running alongside the API. `.gitignore` (scaffold) ignores
+   `node_modules`/`dist`; `.env` ignored, `.env.example` tracked (verified). Verified:
+   `format`/`lint`/`build`/`test` green, dev server boots on :5173 (HTTP 200). _Commit:
+   empty app boots._
 2. **Types + API client.** Hand-written TS types mirroring the contract above
    (`AuthResponse`, `TransactionDto`, `PagedResult<T>`, `TransactionType`, `AssetType`,
    `SortField`, a `ProblemDetails`/`ValidationProblemDetails` shape). An axios instance with

@@ -5,7 +5,11 @@
       "Bash(dotnet test *)",
       "Bash(dotnet build *)",
       "Bash(docker info *)",
-      "Bash(env)"
+      "Bash(env)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)"
     ]
   }
 }
