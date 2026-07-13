@@ -14,7 +14,7 @@ remembering; deeper rationale lives in git history and the code.
 
 | Layer | State |
 |-------|-------|
-| **Frontend** | 🚧 In progress (3 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer landed (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. No routing/screens yet. |
+| **Frontend** | 🚧 In progress (4 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. Routing landed (`src/routes/`: React Router 7, `paths`, `RequireAuth`/`RedirectIfAuthenticated` guards, `AppLayout` shell w/ logout; `src/pages/` placeholder Login/Register/Transactions). Real auth forms + list next. |
 | **Domain** | ✅ 7 entities + enums, `Currency` value object (`ValueObjects/Currency.cs` + `Iso4217`), exceptions `EmailAlreadyInUse`/`InvalidCredentials`/`NotFoundException`/`DomainException`. |
 | **Infrastructure** | ✅ `PortfolioDbContext` + EF configs + DI + initial migration. `CurrencyConverter` via `ConfigureConventions` (varchar(3), no migration). Ports impl: `PasswordHasher` (bcrypt), `JwtTokenGenerator`, `UserRepository`, `PortfolioRepository`, `TransactionRepository` (+ `GetHeldQuantityAsync`), `AssetRepository` (get-or-create). |
 | **Application** | ✅ Pipeline wired (MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Ports: auth + `ICurrentUserService`/`IPortfolioRepository`/`ITransactionRepository`/`IAssetRepository`. Auth (`Register`/`Login`, register bootstraps `Portfolio` @ USD) + Transactions CRUD landed. `TransactionDto`, `PagedResult<T>`, `TransactionProfile`. |
@@ -79,7 +79,7 @@ Commits:
 - [x] Scaffold + tooling (Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `.env`, dev server :5173)
 - [x] Types + API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`; axios bearer + 401 interceptors via `setAuthToken`/`setUnauthorizedHandler`)
 - [x] Auth context + session (`AuthProvider` + `useAuth`, token+user in `localStorage`, 401 → `setUnauthorizedHandler` clears session; `QueryClientProvider` wired)
-- [ ] Routing + layout (React Router, public `/login`+`/register`, `RequireAuth` shell)
+- [x] Routing + layout (React Router 7, public `/login`+`/register` via `RedirectIfAuthenticated`, `RequireAuth` → `AppLayout` shell w/ logout; placeholder pages)
 - [ ] Auth screens (RHF + Zod mirroring password policy; map `400.errors` to fields, `409`/`401` form-level)
 - [ ] Transactions list (`useTransactions` query, filter/sort/page, loading/empty/error states)
 - [ ] Transactions create/edit/delete (Zod-validated form → POST/PUT, confirm-delete → DELETE, invalidate list, `422` form-level)
@@ -91,7 +91,10 @@ Context + `localStorage` (session) · React Hook Form + Zod (forms) · React Rou
 Modules · Vitest + RTL + MSW. API base URL is the only host reference (read once from
 `import.meta.env.VITE_API_BASE_URL`, inlined at build time). Bearer-in-header (not cookies)
 keeps cross-origin Vercel↔Railway friction-free; add `vercel.json` SPA rewrite when
-deploying. F1 CORS prereq (`SpaCors`) is ✅ done and integration-tested.
+deploying. F1 CORS prereq (`SpaCors`) is ✅ done and integration-tested. Routing uses
+declarative `<BrowserRouter>`/`<Routes>` (not the data router); `LoginPage` ships a
+**temporary dev-login** button (stub session) so the guard/layout are exercisable now —
+remove it when the real form lands in Auth screens.
 
 API contract the client codes against: `POST /auth/register|login` → `AuthResponseDto
 { userId, email, token }`. Transactions (all `Bearer`): `POST` 201+Location, `GET` list →
