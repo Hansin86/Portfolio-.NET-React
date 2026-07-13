@@ -10,11 +10,11 @@ remembering; deeper rationale lives in git history and the code.
 
 ---
 
-## Current State (2026-07-11)
+## Current State (2026-07-13)
 
 | Layer | State |
 |-------|-------|
-| **Frontend** | 🚧 In progress (2 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client landed (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions` fns, axios interceptors for bearer + global 401). No UI yet. |
+| **Frontend** | 🚧 In progress (3 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer landed (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. No routing/screens yet. |
 | **Domain** | ✅ 7 entities + enums, `Currency` value object (`ValueObjects/Currency.cs` + `Iso4217`), exceptions `EmailAlreadyInUse`/`InvalidCredentials`/`NotFoundException`/`DomainException`. |
 | **Infrastructure** | ✅ `PortfolioDbContext` + EF configs + DI + initial migration. `CurrencyConverter` via `ConfigureConventions` (varchar(3), no migration). Ports impl: `PasswordHasher` (bcrypt), `JwtTokenGenerator`, `UserRepository`, `PortfolioRepository`, `TransactionRepository` (+ `GetHeldQuantityAsync`), `AssetRepository` (get-or-create). |
 | **Application** | ✅ Pipeline wired (MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Ports: auth + `ICurrentUserService`/`IPortfolioRepository`/`ITransactionRepository`/`IAssetRepository`. Auth (`Register`/`Login`, register bootstraps `Portfolio` @ USD) + Transactions CRUD landed. `TransactionDto`, `PagedResult<T>`, `TransactionProfile`. |
@@ -78,7 +78,7 @@ later screen reuses. Dashboard/charts stay deferred until their backends exist.
 Commits:
 - [x] Scaffold + tooling (Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `.env`, dev server :5173)
 - [x] Types + API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`; axios bearer + 401 interceptors via `setAuthToken`/`setUnauthorizedHandler`)
-- [ ] Auth context + session (`AuthProvider`, token+user in `localStorage`, 401 → clear + redirect; wire `QueryClientProvider`)
+- [x] Auth context + session (`AuthProvider` + `useAuth`, token+user in `localStorage`, 401 → `setUnauthorizedHandler` clears session; `QueryClientProvider` wired)
 - [ ] Routing + layout (React Router, public `/login`+`/register`, `RequireAuth` shell)
 - [ ] Auth screens (RHF + Zod mirroring password policy; map `400.errors` to fields, `409`/`401` form-level)
 - [ ] Transactions list (`useTransactions` query, filter/sort/page, loading/empty/error states)
