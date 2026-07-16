@@ -36,6 +36,50 @@ The dev server runs on **http://localhost:5173**, which is the origin allowed by
 API's `SpaCors` policy (`Cors:AllowedOrigins`). If you change the frontend port, update
 that config on the API too.
 
+## Project structure
+
+```
+src/
+  main.tsx              # entry point — mounts <App>, wires QueryClientProvider + AuthProvider
+  App.tsx               # BrowserRouter + route table (public vs. protected)
+  index.css             # global styles + light/dark theme variables
+
+  api/                  # everything that talks to the backend
+    client.ts           # the single axios instance; bearer-token + global 401 interceptors
+    types.ts            # response/domain types mirroring the API (AuthResponse, TransactionDto…)
+    requests.ts         # request payload types (RegisterRequest, CreateTransactionRequest…)
+    errors.ts           # ApiError + normalizeError (RFC 7807 problem-details → one error shape)
+    auth.ts             # POST /auth/register | /auth/login
+    transactions.ts     # transactions CRUD calls
+    queryClient.ts      # TanStack Query client
+    index.ts            # public surface of the api module
+
+  auth/                 # signed-in session (React Context + localStorage)
+    AuthProvider.tsx    # owns the session; syncs the axios token; registers the 401 handler
+    AuthContext.ts      # context + useAuth() hook
+    session.ts          # load/save/clear the token+user in localStorage
+
+  routes/               # navigation
+    paths.ts            # single source of truth for route paths
+    guards.tsx          # RequireAuth / RedirectIfAuthenticated route gates
+    AppLayout.tsx       # authenticated shell (nav + logout) wrapping protected pages
+
+  pages/                # one component per route screen
+    LoginPage.tsx       # login form (RHF + Zod)
+    RegisterPage.tsx    # registration form (RHF + Zod)
+    TransactionsPage.tsx
+    auth/               # shared building blocks for the auth screens
+      schemas.ts        # Zod schemas mirroring the backend password policy
+      apiFormErrors.ts  # maps an ApiError → field errors (400) or a form-level banner (401/409)
+      AuthForm.module.css
+```
+
+Conventions: server state goes through **TanStack Query**; forms use **React Hook Form +
+Zod** (the schema mirrors the backend validators for instant feedback, but the server stays
+the source of truth); the session lives in **React Context + localStorage**; styling is
+**CSS Modules** (`*.module.css`) using the theme variables in `index.css`. Tests sit next to
+the code they cover (`*.test.ts`).
+
 ## Scripts
 
 | Script                 | Purpose                                  |
