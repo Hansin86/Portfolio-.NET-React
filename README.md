@@ -7,8 +7,10 @@ reports portfolio value, cost basis, and profit/loss converted to a chosen base 
 > **Status:** backend under Clean Architecture with the persistence layer (PostgreSQL +
 > EF Core, initial migration) and two vertical slices in place — **authentication**
 > (register/login, JWT, bcrypt) and **transactions CRUD** (add/edit/delete + filtered,
-> sorted, paged history, scoped per user). The React/TypeScript frontend is not yet in the
-> repo — see the [implementation plan](docs/implementation-plan.md) for the roadmap.
+> sorted, paged history, scoped per user). The React/TypeScript frontend (`frontend/`) is
+> underway — API client, auth/session, routing, and the register/login screens are in;
+> the transactions UI is next. See the [implementation plan](docs/implementation-plan.md)
+> for the roadmap and [`frontend/README.md`](frontend/README.md) for the SPA.
 
 ## Features
 
@@ -25,7 +27,7 @@ spec (FR-01..FR-21, NFR-01..NFR-07) — the source of truth for intended behavio
 ## Tech stack
 
 - **Backend:** ASP.NET Core 10 Web API, MediatR (CQRS), EF Core 10, PostgreSQL, Hangfire
-- **Frontend:** React + TypeScript, Recharts *(planned)*
+- **Frontend:** React 19 + TypeScript (Vite), React Router, TanStack Query, React Hook Form + Zod, axios; Recharts *(planned)*
 - **Auth:** JWT bearer tokens
 - **Market data:** Alpha Vantage API (prices + FX rates)
 - **API docs:** Scalar UI at `/scalar/v1`
@@ -116,5 +118,12 @@ src/
 tests/
   PortfolioApp.UnitTests/       # xUnit + FluentAssertions + NSubstitute + AutoFixture
   PortfolioApp.IntegrationTests/ # WebApplicationFactory + Testcontainers (PostgreSQL)
+frontend/                       # React + TypeScript SPA (Vite) — see frontend/README.md
+  src/
+    api/                        # typed API client (axios), request/response types, errors
+    auth/                       # auth context + session (token/user in localStorage)
+    routes/                     # React Router paths, guards, authenticated layout shell
+    pages/                      # route screens (Login, Register, Transactions)
+      auth/                     # Zod schemas + API-error→form mapping shared by auth forms
 docs/                           # requirements, schema, plan, architecture
 ```
