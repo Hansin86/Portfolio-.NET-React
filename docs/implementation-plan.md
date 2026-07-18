@@ -14,7 +14,7 @@ remembering; deeper rationale lives in git history and the code.
 
 | Layer | State |
 |-------|-------|
-| **Frontend** | 🚧 In progress (8 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. Routing landed (`src/routes/`: React Router 7, `paths`, `RequireAuth`/`RedirectIfAuthenticated` guards, `AppLayout` shell w/ logout). Real auth screens landed (`src/pages/auth/`: RHF + Zod `schemas` mirroring the password policy, `applyApiError` mapping 400→fields / 401·409→form-level; `LoginPage`/`RegisterPage` forms → `authApi` → `useAuth().login`; dev-login stub removed). Transactions list landed (`src/pages/transactions/`: `useTransactions` query hook + `transactionKeys` factory, `keepPreviousData` paging; `TransactionsPage` w/ debounced ticker + type + date-range filters, clickable-header sort, prev/next pager, explicit loading/empty/error states). Create/edit/delete landed (`useTransactionMutations` create/update/delete hooks invalidating the list; `TransactionFormModal` — one RHF + Zod add/edit form mirroring the backend validators, `applyApiError` 400→fields / 422→form-level, read-only ticker on edit; `DeleteTransactionDialog` confirm-then-delete). Component/integration tests landed (Vitest + RTL + MSW: `src/test/` setup/server/utils with an in-memory MSW store; `schemas` unit tests + `TransactionsPage` integration covering list/empty/add/422-over-sell/delete). CI frontend job next. |
+| **Frontend** | ✅ Auth + transactions UI complete (9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. Routing landed (`src/routes/`: React Router 7, `paths`, `RequireAuth`/`RedirectIfAuthenticated` guards, `AppLayout` shell w/ logout). Real auth screens landed (`src/pages/auth/`: RHF + Zod `schemas` mirroring the password policy, `applyApiError` mapping 400→fields / 401·409→form-level; `LoginPage`/`RegisterPage` forms → `authApi` → `useAuth().login`; dev-login stub removed). Transactions list landed (`src/pages/transactions/`: `useTransactions` query hook + `transactionKeys` factory, `keepPreviousData` paging; `TransactionsPage` w/ debounced ticker + type + date-range filters, clickable-header sort, prev/next pager, explicit loading/empty/error states). Create/edit/delete landed (`useTransactionMutations` create/update/delete hooks invalidating the list; `TransactionFormModal` — one RHF + Zod add/edit form mirroring the backend validators, `applyApiError` 400→fields / 422→form-level, read-only ticker on edit; `DeleteTransactionDialog` confirm-then-delete). Component/integration tests landed (Vitest + RTL + MSW: `src/test/` setup/server/utils with an in-memory MSW store; `schemas` unit tests + `TransactionsPage` integration covering list/empty/add/422-over-sell/delete). CI frontend job landed (`ci.yml`: a `changes` job via `dorny/paths-filter` gates a Node 22 `frontend` job — `npm ci` → lint → typecheck/build → test — path-filtered to `frontend/**`). |
 | **Domain** | ✅ 7 entities + enums, `Currency` value object (`ValueObjects/Currency.cs` + `Iso4217`), exceptions `EmailAlreadyInUse`/`InvalidCredentials`/`NotFoundException`/`DomainException`. |
 | **Infrastructure** | ✅ `PortfolioDbContext` + EF configs + DI + initial migration. `CurrencyConverter` via `ConfigureConventions` (varchar(3), no migration). Ports impl: `PasswordHasher` (bcrypt), `JwtTokenGenerator`, `UserRepository`, `PortfolioRepository`, `TransactionRepository` (+ `GetHeldQuantityAsync`), `AssetRepository` (get-or-create). |
 | **Application** | ✅ Pipeline wired (MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Ports: auth + `ICurrentUserService`/`IPortfolioRepository`/`ITransactionRepository`/`IAssetRepository`. Auth (`Register`/`Login`, register bootstraps `Portfolio` @ USD) + Transactions CRUD landed. `TransactionDto`, `PagedResult<T>`, `TransactionProfile`. |
@@ -69,7 +69,7 @@ DB-side `GetHeldQuantityAsync`; paged list default 20 / cap 100, default sort
 re-add); enums serialize as names; POST 201+Location, PUT 200, DELETE 204; asset
 get-or-create seeds interim metadata until FR-08.
 
-### 🚧 Frontend foundation + auth & transactions UI (FR-01, FR-02, FR-05–FR-07; NFR-06, NFR-07)
+### ✅ Frontend foundation + auth & transactions UI (FR-01, FR-02, FR-05–FR-07; NFR-06, NFR-07)
 
 Stand up the React/TS app for a working end-to-end slice (register/login → manage
 transactions) and establish the patterns (API client, auth/token, routing, forms) every
@@ -84,7 +84,7 @@ Commits:
 - [x] Transactions list (`useTransactions` query, filter/sort/page, loading/empty/error states)
 - [x] Transactions create/edit/delete (Zod-validated form → POST/PUT, confirm-delete → DELETE, invalidate list, `422` form-level)
 - [x] Component/integration tests (Vitest + RTL + MSW)
-- [ ] CI frontend job (`.github/workflows/ci.yml`, path-filtered `frontend/**`)
+- [x] CI frontend job (`.github/workflows/ci.yml`, path-filtered `frontend/**`)
 
 Stack decisions: axios instance + interceptors · TanStack Query (server state) · React
 Context + `localStorage` (session) · React Hook Form + Zod (forms) · React Router · CSS
@@ -170,7 +170,7 @@ Commits:
 
 ## Cross-cutting
 
-- ✅ **CI pipeline (NFR-07)** — `.github/workflows/ci.yml`: build + unit + integration on push/PR to main.
+- ✅ **CI pipeline (NFR-07)** — `.github/workflows/ci.yml`: backend build + unit + integration on push/PR to main, plus a path-filtered `frontend/**` job (lint + typecheck/build + Vitest).
 - ⬜ **OpenAPI/Scalar (NFR-01)** — scaffolded; keep endpoints documented as they land.
 - ⬜ **Align EF Core package versions** — `MSB3277` conflict (Relational 10.0.4 vs 10.0.9); harmless, pin one version to clear.
 
