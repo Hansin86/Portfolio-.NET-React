@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { normalizeError, type SortField, type TransactionQuery, type TransactionType } from '../api'
+import {
+  normalizeError,
+  type SortField,
+  type TransactionDto,
+  type TransactionQuery,
+  type TransactionType,
+} from '../api'
+import { DeleteTransactionDialog } from './transactions/DeleteTransactionDialog'
+import { TransactionFormModal } from './transactions/TransactionFormModal'
 import styles from './transactions/TransactionsList.module.css'
 import { useTransactions } from './transactions/useTransactions'
+
+/** Which modal, if any, is open: adding a new transaction, or editing/deleting an existing one. */
+type ModalState =
+  | { kind: 'create' }
+  | { kind: 'edit'; transaction: TransactionDto }
+  | { kind: 'delete'; transaction: TransactionDto }
+  | null
 
 const PAGE_SIZE = 20
 
@@ -40,6 +55,7 @@ export function TransactionsPage() {
   const [sortBy, setSortBy] = useState<SortField>('TransactionDate')
   const [descending, setDescending] = useState(true)
   const [page, setPage] = useState(1)
+  const [modal, setModal] = useState<ModalState>(null)
 
   // Any change to a filter or sort should return to the first page.
   useEffect(() => {
@@ -84,12 +100,21 @@ export function TransactionsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Transactions</h1>
-        {data && (
-          <span className={styles.count}>
-            {data.totalCount} {data.totalCount === 1 ? 'transaction' : 'transactions'}
-          </span>
-        )}
+        <div className={styles.headerTitle}>
+          <h1 className={styles.title}>Transactions</h1>
+          {data && (
+            <span className={styles.count}>
+              {data.totalCount} {data.totalCount === 1 ? 'transaction' : 'transactions'}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={() => setModal({ kind: 'create' })}
+        >
+          Add transaction
+        </button>
       </div>
 
       <div className={styles.filters}>
@@ -197,6 +222,9 @@ export function TransactionsPage() {
                   numeric
                   {...{ sortBy, descending, toggleSort }}
                 />
+                <th className={styles.actionsHead}>
+                  <span className={styles.srOnly}>Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -214,6 +242,22 @@ export function TransactionsPage() {
                   </td>
                   <td className={styles.numeric}>{numberFmt.format(tx.quantity)}</td>
                   <td className={styles.numeric}>{formatMoney(tx.pricePerUnit, tx.currency)}</td>
+                  <td className={styles.actionsCell}>
+                    <button
+                      type="button"
+                      className={styles.rowButton}
+                      onClick={() => setModal({ kind: 'edit', transaction: tx })}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.rowButton} ${styles.rowButtonDanger}`}
+                      onClick={() => setModal({ kind: 'delete', transaction: tx })}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -243,6 +287,17 @@ export function TransactionsPage() {
             Next
           </button>
         </div>
+      )}
+
+      {(modal?.kind === 'create' || modal?.kind === 'edit') && (
+        <TransactionFormModal
+          transaction={modal.kind === 'edit' ? modal.transaction : undefined}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {modal?.kind === 'delete' && (
+        <DeleteTransactionDialog transaction={modal.transaction} onClose={() => setModal(null)} />
       )}
     </div>
   )
