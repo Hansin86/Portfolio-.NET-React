@@ -10,11 +10,11 @@ remembering; deeper rationale lives in git history and the code.
 
 ---
 
-## Current State (2026-07-16)
+## Current State (2026-07-18)
 
 | Layer | State |
 |-------|-------|
-| **Frontend** | 🚧 In progress (5 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. Routing landed (`src/routes/`: React Router 7, `paths`, `RequireAuth`/`RedirectIfAuthenticated` guards, `AppLayout` shell w/ logout). Real auth screens landed (`src/pages/auth/`: RHF + Zod `schemas` mirroring the password policy, `applyApiError` mapping 400→fields / 401·409→form-level; `LoginPage`/`RegisterPage` forms → `authApi` → `useAuth().login`; dev-login stub removed). Transactions list next. |
+| **Frontend** | 🚧 In progress (6 of 9 commits). Vite 8 + React 19 + TS under `frontend/`, oxlint + Prettier + Vitest, `VITE_API_BASE_URL`, dev server :5173. Typed API client (`src/api/`: `types`/`requests`/`client`/`errors` + `auth`/`transactions`, axios bearer + global 401 interceptors). Auth/session layer (`src/auth/`: `AuthProvider` + `useAuth`, token+user in `localStorage` via `session.ts`, `setAuthToken` on hydrate/login/logout, 401 → `setUnauthorizedHandler` clears session). `QueryClientProvider` + `queryClient` wired in `main.tsx`. Routing landed (`src/routes/`: React Router 7, `paths`, `RequireAuth`/`RedirectIfAuthenticated` guards, `AppLayout` shell w/ logout). Real auth screens landed (`src/pages/auth/`: RHF + Zod `schemas` mirroring the password policy, `applyApiError` mapping 400→fields / 401·409→form-level; `LoginPage`/`RegisterPage` forms → `authApi` → `useAuth().login`; dev-login stub removed). Transactions list landed (`src/pages/transactions/`: `useTransactions` query hook + `transactionKeys` factory, `keepPreviousData` paging; `TransactionsPage` w/ debounced ticker + type + date-range filters, clickable-header sort, prev/next pager, explicit loading/empty/error states) — *working tree, not yet committed*. Create/edit/delete next. |
 | **Domain** | ✅ 7 entities + enums, `Currency` value object (`ValueObjects/Currency.cs` + `Iso4217`), exceptions `EmailAlreadyInUse`/`InvalidCredentials`/`NotFoundException`/`DomainException`. |
 | **Infrastructure** | ✅ `PortfolioDbContext` + EF configs + DI + initial migration. `CurrencyConverter` via `ConfigureConventions` (varchar(3), no migration). Ports impl: `PasswordHasher` (bcrypt), `JwtTokenGenerator`, `UserRepository`, `PortfolioRepository`, `TransactionRepository` (+ `GetHeldQuantityAsync`), `AssetRepository` (get-or-create). |
 | **Application** | ✅ Pipeline wired (MediatR, AutoMapper, FluentValidation + `ValidationBehaviour`). Ports: auth + `ICurrentUserService`/`IPortfolioRepository`/`ITransactionRepository`/`IAssetRepository`. Auth (`Register`/`Login`, register bootstraps `Portfolio` @ USD) + Transactions CRUD landed. `TransactionDto`, `PagedResult<T>`, `TransactionProfile`. |
@@ -81,7 +81,7 @@ Commits:
 - [x] Auth context + session (`AuthProvider` + `useAuth`, token+user in `localStorage`, 401 → `setUnauthorizedHandler` clears session; `QueryClientProvider` wired)
 - [x] Routing + layout (React Router 7, public `/login`+`/register` via `RedirectIfAuthenticated`, `RequireAuth` → `AppLayout` shell w/ logout; placeholder pages)
 - [x] Auth screens (RHF + Zod mirroring password policy; map `400.errors` to fields, `409`/`401` form-level)
-- [ ] Transactions list (`useTransactions` query, filter/sort/page, loading/empty/error states)
+- [x] Transactions list (`useTransactions` query, filter/sort/page, loading/empty/error states)
 - [ ] Transactions create/edit/delete (Zod-validated form → POST/PUT, confirm-delete → DELETE, invalidate list, `422` form-level)
 - [ ] Component/integration tests (Vitest + RTL + MSW)
 - [ ] CI frontend job (`.github/workflows/ci.yml`, path-filtered `frontend/**`)
@@ -96,7 +96,10 @@ declarative `<BrowserRouter>`/`<Routes>` (not the data router). Auth forms use R
 `zodResolver`; the Zod schema mirrors the backend password policy for instant feedback but
 the server stays source of truth. On success `useAuth().login` stores the session and the
 `RedirectIfAuthenticated` guard forwards the user on — no manual navigate. The temporary
-dev-login stub has been removed now that the real forms have landed.
+dev-login stub has been removed now that the real forms have landed. The transactions list
+keys each filter/sort/page combo via a `transactionKeys` factory (so create/edit/delete can
+invalidate `['transactions']`), debounces the ticker filter 300 ms, and holds the previous
+page via `keepPreviousData` to avoid an empty-table flash while refetching.
 
 API contract the client codes against: `POST /auth/register|login` → `AuthResponseDto
 { userId, email, token }`. Transactions (all `Bearer`): `POST` 201+Location, `GET` list →

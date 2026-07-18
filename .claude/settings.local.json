@@ -12,7 +12,8 @@
       "Bash(npm test *)",
       "Bash(npx vitest *)",
       "Bash(npx tsc *)",
-      "Bash(npx prettier *)"
+      "Bash(npx prettier *)",
+      "Bash(npx oxlint *)"
     ]
   }
 }

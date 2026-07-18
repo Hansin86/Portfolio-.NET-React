@@ -1,0 +1,214 @@
+.page {
+  text-align: left;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.count {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* ---- Filters ---- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.filterLabel {
+  font-size: 0.75rem;
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.control {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.reset {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.reset:hover {
+  border-color: var(--accent);
+}
+
+/* ---- Table ---- */
+
+.tableWrap {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th,
+.table td {
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.sortable:hover {
+  color: var(--accent);
+}
+
+.sortArrow {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+
+.type {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.buy {
+  background: rgba(34, 139, 94, 0.12);
+  color: #1f9d63;
+}
+
+.sell {
+  background: rgba(214, 69, 69, 0.12);
+  color: #d64545;
+}
+
+/* Dim the table while a background refetch (page/filter change) is in flight. */
+.stale {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+/* ---- States (loading / empty / error) ---- */
+
+.state {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.error {
+  border-color: #d64545;
+  color: #d64545;
+}
+
+.retry {
+  font: inherit;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d64545;
+  border-radius: 8px;
+  background: transparent;
+  color: #d64545;
+  cursor: pointer;
+}
+
+/* ---- Pagination ---- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.pageButton {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.pageButton:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
