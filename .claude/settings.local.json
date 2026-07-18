@@ -13,7 +13,9 @@
       "Bash(npx vitest *)",
       "Bash(npx tsc *)",
       "Bash(npx prettier *)",
-      "Bash(npx oxlint *)"
+      "Bash(npx oxlint *)",
+      "Bash(node *)",
+      "Bash(npm ls *)"
     ]
   }
 }

@@ -13,8 +13,29 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  # Detect which part of the repo changed so the frontend job only runs when it needs to.
+  # GitHub has no native per-job path filter, so we compute it once and gate on the output.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+
   build-and-test:
     name: Build & test
     runs-on: ubuntu-latest
@@ -49,3 +70,36 @@ jobs:
       # the disposable PostgreSQL instance these tests require.
       - name: Integration tests
         run: dotnet test tests/PortfolioApp.IntegrationTests --configuration Release --no-build --verbosity normal
+
+  frontend:
+    name: Frontend build & test
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # `npm run build` runs `tsc -b` (typecheck) then `vite build`.
+      - name: Typecheck & build
+        run: npm run build
+
+      - name: Test
+        run: npm test
